@@ -1,0 +1,26 @@
+name: API Health Check
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check API Health
+        run: |
+          response=$(curl -sf https://helper.lanelayer.com/health || echo '{"status":"down"}')
+          echo "Response: $response"
+          if echo "$response" | grep -q '"status":"ok"'; then
+            echo "API is healthy"
+          else
+            echo "API health check failed!"
+            exit 1
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Health check failed - API may be down"
