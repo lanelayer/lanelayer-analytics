@@ -8,3 +8,6 @@ data/
 dist/
 *.egg-info/
 .pytest_cache/
+
+# Rust
+/target/

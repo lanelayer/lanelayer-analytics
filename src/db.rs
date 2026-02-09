@@ -1,7 +1,8 @@
-import aiosqlite
-from app.config import DATABASE_PATH
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
+use std::path::Path;
+use std::str::FromStr;
 
-SCHEMA = """
+const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL CHECK(type IN ('web', 'cli')),
@@ -54,20 +55,22 @@ CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
 CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_web_user ON sessions(web_user_id);
 CREATE INDEX IF NOT EXISTS idx_cli_events_command ON cli_events(command);
-"""
+"#;
 
+pub async fn create_pool(path: &Path) -> Result<SqlitePool, sqlx::Error> {
+    let parent = path.parent().unwrap_or(Path::new("."));
+    if !parent.as_os_str().is_empty() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    let opts = SqliteConnectOptions::from_str(&format!("sqlite:{}", path.display()))?
+        .create_if_missing(true);
+    let pool = SqlitePool::connect_with(opts).await?;
+    Ok(pool)
+}
 
-async def get_db():
-    db = await aiosqlite.connect(DATABASE_PATH)
-    db.row_factory = aiosqlite.Row
-    try:
-        yield db
-    finally:
-        await db.close()
-
-
-async def init_db():
-    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    async with aiosqlite.connect(DATABASE_PATH) as db:
-        await db.executescript(SCHEMA)
-        await db.commit()
+pub async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    for statement in SCHEMA.split(';').filter(|s| !s.trim().is_empty()) {
+        sqlx::query(statement.trim()).execute(pool).await?;
+    }
+    Ok(())
+}
