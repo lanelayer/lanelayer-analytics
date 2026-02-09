@@ -1,10 +1,17 @@
-FROM python:3.12-slim
-
+FROM rust:1-bookworm AS builder
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY Cargo.toml ./
+COPY src ./src
 
-COPY app/ app/
+RUN cargo build --release
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+
+COPY --from=builder /app/target/release/lanelayer-analytics /app/lanelayer-analytics
+
+ENV RUST_LOG=info
+EXPOSE 8080
+CMD ["/app/lanelayer-analytics"]
