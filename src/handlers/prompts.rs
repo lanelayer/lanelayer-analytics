@@ -75,13 +75,6 @@ pub async fn create_prompt_version(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let now = Utc::now().to_rfc3339();
 
-    if req.is_active {
-        sqlx::query("UPDATE prompt_versions SET is_active = 0")
-            .execute(&pool)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    }
-
     sqlx::query(
         "INSERT INTO prompt_versions (version, content, is_active, created_at) VALUES (?, ?, ?, ?)",
     )
@@ -92,6 +85,14 @@ pub async fn create_prompt_version(
     .execute(&pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if req.is_active {
+        sqlx::query("UPDATE prompt_versions SET is_active = 0 WHERE version != ?")
+            .bind(&req.version)
+            .execute(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
 
     Ok(Json(serde_json::json!({
         "success": true,
