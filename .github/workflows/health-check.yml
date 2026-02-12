@@ -8,10 +8,12 @@ on:
 jobs:
   health-check:
     runs-on: ubuntu-latest
+    env:
+      API_URL: https://lanelayer-analytics.fly.dev
     steps:
       - name: Check API Health
         run: |
-          response=$(curl -sf https://helper.lanelayer.com/health || echo '{"status":"down"}')
+          response=$(curl -sf "$API_URL/health" || echo '{"status":"down"}')
           echo "Response: $response"
           if echo "$response" | grep -q '"status":"ok"'; then
             echo "API is healthy"

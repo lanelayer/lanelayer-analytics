@@ -20,7 +20,7 @@ Ask me questions to understand my project:
 - What data needs to be stored persistently?
 - What are the key business rules or logic?
 - Are there any specific requirements or constraints?
-- What programming language do I prefer? (Python is the default, but other languages work)
+- What programming language do I prefer?
 
 Log all my answers in journey.log.
 
@@ -63,11 +63,11 @@ Update journey.log with test results.
 
 ## Docs you can reference
 
-- **Complete Build Guide**: https://helper.lanelayer.com/api/v1/docs/guide?session={{SESSION_ID}}&user={{USER_ID}}
-- **Quickstart**: https://helper.lanelayer.com/api/v1/docs/quickstart?session={{SESSION_ID}}&user={{USER_ID}}
-- **K/V API Reference**: https://helper.lanelayer.com/api/v1/docs/kv-api?session={{SESSION_ID}}&user={{USER_ID}}
-- **Deployment**: https://helper.lanelayer.com/api/v1/docs/deployment?session={{SESSION_ID}}&user={{USER_ID}}
-- **Terminology**: https://helper.lanelayer.com/api/v1/docs/terminology?session={{SESSION_ID}}&user={{USER_ID}}
+- **Complete Build Guide**: {{API_URL}}/api/v1/docs/guide?session={{SESSION_ID}}&user={{USER_ID}}
+- **Quickstart**: {{API_URL}}/api/v1/docs/quickstart?session={{SESSION_ID}}&user={{USER_ID}}
+- **K/V API Reference**: {{API_URL}}/api/v1/docs/kv-api?session={{SESSION_ID}}&user={{USER_ID}}
+- **Deployment**: {{API_URL}}/api/v1/docs/deployment?session={{SESSION_ID}}&user={{USER_ID}}
+- **Terminology**: {{API_URL}}/api/v1/docs/terminology?session={{SESSION_ID}}&user={{USER_ID}}
 - **CLI Source**: https://github.com/lanelayer/cli
 
 ## If we get stuck
