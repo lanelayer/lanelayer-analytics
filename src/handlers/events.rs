@@ -59,6 +59,20 @@ pub async fn track_event(
 
     let event_id = row.last_insert_rowid();
 
+    // Link this session to the web user so correlation with CLI later works.
+    if let Some(ref session_id) = event.session_id {
+        if event.user_id.starts_with("web_") {
+            sqlx::query(
+                "UPDATE sessions SET web_user_id = ? WHERE id = ? AND (web_user_id IS NULL OR web_user_id = '')",
+            )
+            .bind(&event.user_id)
+            .bind(session_id)
+            .execute(&pool)
+            .await
+            .ok();
+        }
+    }
+
     if event.event_type == "copy_prompt" {
         let version = event
             .data

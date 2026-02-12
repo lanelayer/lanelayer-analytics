@@ -48,7 +48,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .layer(cors)
         .with_state(pool);
 
-    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 8080));
+    let port: u16 = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8080);
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("LaneLayer Analytics listening on {}", addr);
     axum::serve(
         tokio::net::TcpListener::bind(addr).await?,

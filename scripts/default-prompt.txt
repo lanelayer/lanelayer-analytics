@@ -1,0 +1,95 @@
+# Build My Lane
+
+I want to build a lane on LaneLayer - a Bitcoin-anchored execution environment. Help me figure out what to build and then implement it.
+
+## Keep a journey log
+
+Maintain a `journey.log` file in my project root throughout our session. Track:
+- All questions you ask me and my responses
+- Key decisions we make during development
+- Any blockers or issues we encounter
+- Solutions we implement
+
+Update it after each significant interaction - helps if I step away and come back later.
+
+## Step 1: Interview me first
+
+Ask me questions to understand my project:
+- What type of application do I want to build? (prediction market, escrow service, voting system, NFT marketplace, etc.)
+- What are the core features and functionality I need?
+- What data needs to be stored persistently?
+- What are the key business rules or logic?
+- Are there any specific requirements or constraints?
+- What programming language do I prefer?
+
+Log all my answers in journey.log.
+
+## Step 2: Check my CLI
+
+Once we know what we're building, make sure I have the LaneLayer CLI installed. Have me run:
+
+```bash
+lane --help
+```
+
+If it doesn't work, help me install it:
+```bash
+npm install -g @lanelayer/cli
+```
+
+**Important CLI rules:**
+- Always run actual CLI commands (`lane --help`, `lane <command> --help`) to get current syntax
+- If commands don't work or seem outdated, have me upgrade: `npm install -g @lanelayer/cli@latest`
+- The CLI is the source of truth - don't rely on potentially stale documentation
+- Check the source at https://github.com/lanelayer/cli if you need implementation details
+
+## Step 3: Build it
+
+Once you understand my requirements:
+- Create the lane project with `lane create <project-name> --template python`
+- Implement the core functionality using the K/V API for persistence
+- Follow patterns from the documentation
+- Make sure the code is production-ready
+- Update journey.log with implementation decisions
+
+## Step 4: Help me test
+
+Guide me through:
+- Testing all the endpoints
+- Verifying K/V storage works correctly
+- Checking that the business logic functions as expected
+
+Update journey.log with test results.
+
+## Docs you can reference
+
+- **Complete Build Guide**: {{API_URL}}/api/v1/docs/guide?session={{SESSION_ID}}&user={{USER_ID}}
+- **Quickstart**: {{API_URL}}/api/v1/docs/quickstart?session={{SESSION_ID}}&user={{USER_ID}}
+- **K/V API Reference**: {{API_URL}}/api/v1/docs/kv-api?session={{SESSION_ID}}&user={{USER_ID}}
+- **Deployment**: {{API_URL}}/api/v1/docs/deployment?session={{SESSION_ID}}&user={{USER_ID}}
+- **Terminology**: {{API_URL}}/api/v1/docs/terminology?session={{SESSION_ID}}&user={{USER_ID}}
+- **CLI Source**: https://github.com/lanelayer/cli
+
+## If we get stuck
+
+If I seem stuck or we hit issues you can't resolve:
+
+1. First, break down the problem and give me clear step-by-step guidance
+2. Point me to the relevant documentation above
+3. If still stuck, help me post in the LaneLayer Discord (https://discord.gg/F9GwH7zzJm):
+   - Draft a well-formatted question for me that includes what I'm trying to do, what I've tried, the exact error, relevant code, and my CLI version
+   - Format it so I can just copy and paste it into Discord
+
+## Key things to remember
+
+- CLI installation is always the first priority
+- Always use the K/V API for persistent storage
+- Follow the project structure from the documentation
+- Use the same patterns for route handlers and data management
+- Keep the code clean, well-commented, and following best practices
+- Test thoroughly before suggesting deployment
+- Keep journey.log updated throughout
+
+## Start now
+
+Ask me what I want to build.
