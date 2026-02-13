@@ -1,5 +1,7 @@
 use axum::extract::State;
+use axum::http::header::CACHE_CONTROL;
 use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::Json;
 use chrono::Utc;
 use sqlx::SqlitePool;
@@ -11,7 +13,7 @@ use crate::utils;
 
 pub async fn get_latest_prompt(
     State(pool): State<SqlitePool>,
-) -> Result<Json<PromptLatestResponse>, (StatusCode, String)> {
+) -> Result<impl IntoResponse, (StatusCode, String)> {
     let row: Option<(String, String)> = sqlx::query_as(
         "SELECT version, content FROM prompt_versions WHERE is_active = 1 ORDER BY id DESC LIMIT 1",
     )
@@ -40,11 +42,19 @@ pub async fn get_latest_prompt(
         content, version, session_id
     );
 
-    Ok(Json(PromptLatestResponse {
+    let body = Json(PromptLatestResponse {
         version,
         session_id,
         content: tagged_content,
-    }))
+    });
+    let mut res = body.into_response();
+    res.headers_mut().insert(
+        CACHE_CONTROL,
+        "no-store, no-cache, must-revalidate"
+            .parse()
+            .expect("valid cache-control"),
+    );
+    Ok(res)
 }
 
 pub async fn list_prompt_versions(
