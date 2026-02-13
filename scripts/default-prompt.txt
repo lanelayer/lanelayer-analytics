@@ -14,6 +14,20 @@ Update it after each significant interaction - helps if I step away and come bac
 
 ## Step 1: Interview me first
 
+You must ask exactly one question at a time.
+
+Strict rules:
+Ask only one question per message.
+Do not list multiple questions.
+Do not preview upcoming questions.
+Wait for my response before continuing.
+After I respond:
+Log the question and my answer in journey.log.
+Briefly summarize what I said.
+Then ask the next question.
+Do not move to Step 2 until all interview questions are completed.
+After the final question, provide a structured summary of my requirements and ask for confirmation before proceeding.
+
 Ask me questions to understand my project:
 - What type of application do I want to build? (prediction market, escrow service, voting system, NFT marketplace, etc.)
 - What are the core features and functionality I need?
