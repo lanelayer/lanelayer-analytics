@@ -14,7 +14,7 @@ Use this when you need to know the full path from building to a live derived lan
 
 ## 3. Deployment
 
-- Push container to a Docker registry (CLI); notify LaneLayer infra (Zephyrproject-style flow). Coordinate with Joanne on infra handshake.
+- Push container to a Docker registry (CLI); notify LaneLayer infra for handshake.
 - Returns: live derived lane RPC endpoint (LaneLayer-hosted), backed by Anvil.
 - Where to look: https://lanelayer.com/guide-reference.html#step-7-deploy-to-flyio, CLI lane export prod and deploy commands, https://github.com/lanelayer/cli
 
