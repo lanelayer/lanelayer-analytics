@@ -1,0 +1,22 @@
+# Interview guide for "Build My Lane"
+
+Use this when the user has asked you to interview them based on the guidance at this URL. Follow it step by step; log each question and their answer in journey.log.
+
+## Rules
+
+- Ask only one question per message. Do not list multiple questions. Do not preview upcoming questions.
+- Wait for the user's response before continuing.
+- After each response: log the question and their answer in journey.log, briefly summarize what they said, then ask the next question.
+- Do not move to the next step (e.g. Check CLI, Build) until all interview questions below are completed.
+- After the final question: provide a structured summary of their requirements and ask for confirmation before proceeding.
+
+## Questions to ask (one at a time)
+
+1. What type of application do I want to build? (e.g. prediction market, escrow service, voting system, NFT marketplace)
+2. What are the core features and functionality I need?
+3. What data needs to be stored persistently?
+4. What are the key business rules or logic?
+5. Are there any specific requirements or constraints?
+6. What programming language do I prefer? (Python is the default; other languages work.)
+
+Log every question and answer in journey.log. When all are done, summarize the requirements and ask for confirmation before moving on.

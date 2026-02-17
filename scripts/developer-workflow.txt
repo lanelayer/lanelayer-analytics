@@ -1,0 +1,35 @@
+# Developer workflow — where to look
+
+Use this when you need to know the full path from building to a live derived lane. Seek details from the URLs below; don't assume you have the full picture in context.
+
+## 1. GitHub and source control
+
+- Guide the user through repo init, commit flow, repo setup, push, and container packaging.
+- Where to look: fetch the github-flow doc from this API (same base URL as this doc).
+
+## 2. Build and RISC-V
+
+- Building a RISC-V container with the CLI; preparing the lane for deployment.
+- Where to look: https://lanelayer.com/riscv-intent.html (RISC-V intent build, package, upload), https://lanelayer.com/guide-reference.html (create lane, K/V, export).
+
+## 3. Deployment
+
+- Push container to a Docker registry (CLI); notify LaneLayer infra (Zephyrproject-style flow). Coordinate with Joanne on infra handshake.
+- Returns: live derived lane RPC endpoint (LaneLayer-hosted), backed by Anvil.
+- Where to look: https://lanelayer.com/guide-reference.html#step-7-deploy-to-flyio, CLI lane export prod and deploy commands, https://github.com/lanelayer/cli
+
+## 4. Resilience and escalation
+
+- Detect and diagnose issues; attempt recovery when safe. If blocked, escalate via CLI or Discord with structured error and context (what was tried, exact error, CLI version, logs).
+- Where to look: https://discord.gg/F9GwH7zzJm, CLI output and health endpoints, https://lanelayer.com/guide-reference.html#step-3-start-development-mode
+
+## 5. End state
+
+- Developer has a live derived lane RPC endpoint (LaneLayer, Anvil-backed) and can proceed to frontend or app integration.
+
+## Quick URLs
+
+- Full build/K/V/deploy: https://lanelayer.com/guide-reference.html
+- RISC-V intent: https://lanelayer.com/riscv-intent.html
+- CLI: https://github.com/lanelayer/cli
+- Discord: https://discord.gg/F9GwH7zzJm
