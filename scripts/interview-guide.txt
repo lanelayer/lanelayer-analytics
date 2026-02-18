@@ -17,6 +17,6 @@ Use this when the user has asked you to interview them based on the guidance at 
 3. What data needs to be stored persistently?
 4. What are the key business rules or logic?
 5. Are there any specific requirements or constraints?
-6. What programming language do I prefer? (Python is the default; other languages work.)
+6. What programming language do you prefer? (Python is the default; other languages work.)
 
 Log every question and answer in journey.log. When all are done, summarize the requirements and ask for confirmation before moving on.
