@@ -1,0 +1,36 @@
+# Guide the user through Git and GitHub
+
+Use this when the prompt says to guide the user through source control. Do it from the start where possible: init early, then commits, then repo and push.
+
+## From the start
+
+- git init as soon as the project exists (e.g. after lane create or when the first code is in place). Do not wait until "ready to deploy."
+- Encourage small, logical commits as you build: one feature or fix per commit, clear messages.
+- Track in journey.log: when you ran git init, what the user named the repo (if any), and when you suggested pushing.
+
+## Commit flow
+
+- Have the user run the commands; you suggest them. Example sequence:
+  - git init
+  - git add . (or specific files)
+  - git commit -m "Clear message"
+- Repeat after each meaningful change. Message should describe what changed, not "updates."
+
+## Repo and push
+
+- When the user is ready (or when you have a first working slice), guide them to create a GitHub repo (if they don't have one): create on GitHub, then add remote and push.
+- Standard steps:
+  - Create repository on GitHub (no need to add README/license if the project already has files).
+  - git remote add origin <repo-url>
+  - git branch -M main
+  - git push -u origin main
+- If the project is already a clone, ensure they push to their own fork or repo as appropriate.
+
+## Container packaging
+
+- When the lane has a Dockerfile (e.g. from lane create or lane export prod), that is part of "container packaging." Guide them to commit the Dockerfile and any deployment artifacts, and to use the CLI for export/push when they are ready to deploy (see developer workflow / deployment docs for where to look).
+
+## What to do in the prompt
+
+- You don't do the git commands for the user; you prompt them with the exact commands and explain the next step.
+- After each step, suggest they run the command, then ask them to confirm or paste any error so you can continue. Update journey.log with each step (e.g. "Suggested git init; user ran it.").
