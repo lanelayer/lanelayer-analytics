@@ -14,6 +14,12 @@ pub fn slack_webhook_url() -> Option<String> {
     Some(u)
 }
 
+/// Public base URL of this analytics service (used in embedded prompt for {{API_URL}}).
+pub fn public_base_url() -> String {
+    std::env::var("PUBLIC_BASE_URL")
+        .unwrap_or_else(|_| "https://lanelayer-analytics.fly.dev".to_string())
+}
+
 pub fn allowed_origins() -> Vec<String> {
     vec![
         "https://lanelayer.github.io".to_string(),
