@@ -25,6 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let db_path = config::database_path();
     let pool = db::create_pool(Path::new(&db_path)).await?;
     db::init_db(&pool).await?;
+    db::ensure_active_prompt(&pool).await?;
 
     let origins: Vec<axum::http::HeaderValue> = config::allowed_origins()
         .into_iter()

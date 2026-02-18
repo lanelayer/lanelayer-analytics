@@ -1,6 +1,13 @@
+use chrono::Utc;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 use std::path::Path;
 use std::str::FromStr;
+
+use crate::config;
+
+/// Embedded default prompt: scripts/default-prompt.txt. Upserted into DB at startup so
+/// the active prompt in the database is always the one shipped with this build.
+static DEFAULT_PROMPT: &str = include_str!("../scripts/default-prompt.txt");
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS users (
@@ -72,5 +79,32 @@ pub async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     for statement in SCHEMA.split(';').filter(|s| !s.trim().is_empty()) {
         sqlx::query(statement.trim()).execute(pool).await?;
     }
+    Ok(())
+}
+
+/// Upsert the embedded default prompt into prompt_versions and set it active. Called at
+/// startup so the database always has the current prompt from the code; /api/v1/prompt/latest
+/// serves from the DB.
+pub async fn ensure_active_prompt(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    let version = config::APP_VERSION.to_string();
+    let base_url = config::public_base_url();
+    let content = DEFAULT_PROMPT.replace("{{API_URL}}", &base_url);
+    let now = Utc::now().to_rfc3339();
+
+    sqlx::query(
+        "INSERT INTO prompt_versions (version, content, is_active, created_at) VALUES (?, ?, 1, ?)
+         ON CONFLICT(version) DO UPDATE SET content = excluded.content, is_active = 1, created_at = excluded.created_at",
+    )
+    .bind(&version)
+    .bind(&content)
+    .bind(&now)
+    .execute(pool)
+    .await?;
+
+    sqlx::query("UPDATE prompt_versions SET is_active = 0 WHERE version != ?")
+        .bind(&version)
+        .execute(pool)
+        .await?;
+
     Ok(())
 }
