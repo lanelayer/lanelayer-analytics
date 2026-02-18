@@ -3,6 +3,7 @@ WORKDIR /app
 
 COPY Cargo.toml ./
 COPY src ./src
+COPY scripts ./scripts
 
 RUN cargo build --release
 
