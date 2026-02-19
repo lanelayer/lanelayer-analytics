@@ -10,23 +10,23 @@ Never assume prior context: No journey.log or empty? Treat as fresh start. If th
 Step 0: Confirm the project folder
 Before doing anything else on a fresh start, ask me where I want the project to live and what to name the folder. Wait for my confirmation before creating it. Once confirmed, create the folder, cd into it, and treat it as the project root for all subsequent steps. Do not reference or search for a project folder until it has been explicitly created and confirmed.
 Step 1: Interview me
-Interview me based on the guidance at https://lanelayer-analytics.fly.dev/api/v1/docs/interview-guide (fetch that URL for the full interview rules and questions). Log all answers in journey.log.
+Interview me based on the guidance at {{API_URL}}/api/v1/docs/interview-guide (fetch that URL for the full interview rules and questions). Log all answers in journey.log.
 Step 2: Guide me through Git and GitHub
-Immediately after the interview, before any code is written, initialize the repository: run git init, create an initial .gitignore, and make the first commit. Then guide me through the full GitHub flow: remote repo setup, push, and container packaging. Follow the guidance at https://lanelayer-analytics.fly.dev/api/v1/docs/github-flow (fetch that URL for the full Git/GitHub steps). Prompt me with the exact git commands to run at each step — I run them, you do not. Log each step in journey.log.
+Immediately after the interview, before any code is written, initialize the repository: run git init, create an initial .gitignore, and make the first commit. Then guide me through the full GitHub flow: remote repo setup, push, and container packaging. Follow the guidance at {{API_URL}}/api/v1/docs/github-flow (fetch that URL for the full Git/GitHub steps). Prompt me with the exact git commands to run at each step — I run them, you do not. Log each step in journey.log.
 Step 3: Check my CLI
 Have me run lane --help. If missing: npm install -g @lanelayer/cli. Always use real CLI output for current syntax. CLI is the source of truth: https://github.com/lanelayer/cli
 Step 4: Build it
-Only after the repo is initialized and the first commit is made, create the lane (lane create <name> --template python or per guide), implement with the K/V API, and follow patterns from the docs. Get details from https://lanelayer-analytics.fly.dev/api/v1/docs/guide (or https://lanelayer.com/guide-reference.html). Commit meaningful checkpoints along the way. Update journey.log with decisions.
+Only after the repo is initialized and the first commit is made, create the lane (lane create <name> --template python or per guide), implement with the K/V API, and follow patterns from the docs. Get details from {{API_URL}}/api/v1/docs/guide. Commit meaningful checkpoints along the way. Update journey.log with decisions.
 Step 5: Test, then deployment
-Guide me through testing endpoints and K/V. For deployment (push to registry, LaneLayer infra, live RPC/Anvil), see https://lanelayer-analytics.fly.dev/api/v1/docs/developer-workflow (fetch that URL for the full workflow) and the deployment section of the guide.
+Guide me through testing endpoints and K/V. For deployment (push to registry, LaneLayer infra, live RPC/Anvil), see {{API_URL}}/api/v1/docs/developer-workflow (fetch that URL for the full workflow) and the deployment section of the guide.
 Where to look (fetch when you need details)
 
-Interview questions: https://lanelayer-analytics.fly.dev/api/v1/docs/interview-guide
-Git/GitHub flow: https://lanelayer-analytics.fly.dev/api/v1/docs/github-flow
-Full workflow (RISC-V, deployment, resilience): https://lanelayer-analytics.fly.dev/api/v1/docs/developer-workflow
-Build guide (setup, K/V, deploy): https://lanelayer-analytics.fly.dev/api/v1/docs/guide — or https://lanelayer.com/guide-reference.html
-K/V API: https://lanelayer-analytics.fly.dev/api/v1/docs/kv-api — or https://lanelayer.com/guide-reference.html#step-4-understanding-the-kv-api
-Deployment steps: https://lanelayer-analytics.fly.dev/api/v1/docs/deployment — or https://lanelayer.com/guide-reference.html#step-7-deploy-to-flyio
+Interview questions: {{API_URL}}/api/v1/docs/interview-guide
+Git/GitHub flow: {{API_URL}}/api/v1/docs/github-flow
+Full workflow (RISC-V, deployment, resilience): {{API_URL}}/api/v1/docs/developer-workflow
+Build guide (setup, K/V, deploy): {{API_URL}}/api/v1/docs/guide
+K/V API: {{API_URL}}/api/v1/docs/kv-api
+Deployment steps: {{API_URL}}/api/v1/docs/deployment
 CLI (source of truth): https://github.com/lanelayer/cli
 Help / escalation: https://discord.gg/F9GwH7zzJm
 
