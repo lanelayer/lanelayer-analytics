@@ -10,15 +10,15 @@ Never assume prior context: No journey.log or empty? Treat as fresh start. If th
 Step 0: Confirm the project folder
 Before doing anything else on a fresh start, ask me where I want the project to live and what to name the folder. Wait for my confirmation before creating it. Once confirmed, create the folder, cd into it, and treat it as the project root for all subsequent steps. Do not reference or search for a project folder until it has been explicitly created and confirmed.
 Step 1: Interview me
-Interview me based on the guidance at https://lanelayer-analytics.fly.dev/api/v1/docs/interview-guide?session=2iirn6tcemx2&user=web_rq5rlaonxr_mljeusir (fetch that URL for the full interview rules and questions). Log all answers in journey.log.
+Interview me based on the guidance at https://lanelayer-analytics.fly.dev/api/v1/docs/interview-guide (fetch that URL for the full interview rules and questions). Log all answers in journey.log.
 Step 2: Guide me through Git and GitHub
-Immediately after the interview, before any code is written, initialize the repository: run git init, create an initial .gitignore, and make the first commit. Then guide me through the full GitHub flow: remote repo setup, push, and container packaging. Follow the guidance at https://lanelayer-analytics.fly.dev/api/v1/docs/github-flow?session=2iirn6tcemx2&user=web_rq5rlaonxr_mljeusir (fetch that URL for the full Git/GitHub steps). Prompt me with the exact git commands to run at each step — I run them, you do not. Log each step in journey.log.
+Immediately after the interview, before any code is written, initialize the repository: run git init, create an initial .gitignore, and make the first commit. Then guide me through the full GitHub flow: remote repo setup, push, and container packaging. Follow the guidance at https://lanelayer-analytics.fly.dev/api/v1/docs/github-flow (fetch that URL for the full Git/GitHub steps). Prompt me with the exact git commands to run at each step — I run them, you do not. Log each step in journey.log.
 Step 3: Check my CLI
 Have me run lane --help. If missing: npm install -g @lanelayer/cli. Always use real CLI output for current syntax. CLI is the source of truth: https://github.com/lanelayer/cli
 Step 4: Build it
-Only after the repo is initialized and the first commit is made, create the lane (lane create <name> --template python or per guide), implement with the K/V API, and follow patterns from the docs. Get details from https://lanelayer-analytics.fly.dev/api/v1/docs/guide?session=2iirn6tcemx2&user=web_rq5rlaonxr_mljeusir (or https://lanelayer.com/guide-reference.html). Commit meaningful checkpoints along the way. Update journey.log with decisions.
+Only after the repo is initialized and the first commit is made, create the lane (lane create <name> --template python or per guide), implement with the K/V API, and follow patterns from the docs. Get details from https://lanelayer-analytics.fly.dev/api/v1/docs/guide (or https://lanelayer.com/guide-reference.html). Commit meaningful checkpoints along the way. Update journey.log with decisions.
 Step 5: Test, then deployment
-Guide me through testing endpoints and K/V. For deployment (push to registry, LaneLayer infra, live RPC/Anvil), see https://lanelayer-analytics.fly.dev/api/v1/docs/developer-workflow?session=2iirn6tcemx2&user=web_rq5rlaonxr_mljeusir (fetch that URL for the full workflow) and the deployment section of the guide.
+Guide me through testing endpoints and K/V. For deployment (push to registry, LaneLayer infra, live RPC/Anvil), see https://lanelayer-analytics.fly.dev/api/v1/docs/developer-workflow (fetch that URL for the full workflow) and the deployment section of the guide.
 Where to look (fetch when you need details)
 
 Interview questions: https://lanelayer-analytics.fly.dev/api/v1/docs/interview-guide
@@ -42,4 +42,4 @@ CLI is source of truth; use K/V API for persistence; test before deploy.
 Keep journey.log updated so the next session can resume.
 
 Start now
-If this folder has a journey.log, read it and say where we are and what you suggest next. If not — and only if not — ask me what I want to build and where to create the project folder.
+If this folder has a journey.log, read it and say where we are and what you suggest next. If not — and only if not — ask me only where to create the project folder and what to name it (Step 0); do not ask what I want to build until the folder has been created and confirmed. The build interview (Step 1) runs only after the folder gate is complete.
