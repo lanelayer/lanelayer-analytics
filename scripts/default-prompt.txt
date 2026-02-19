@@ -8,31 +8,34 @@ You have no memory across restarts.
 You cannot form new memories between sessions.
 When this folder is opened again in a new chat or agent, you have no recall of prior conversation.
 
-The only persistent state allowed across sessions is journey.log inside the confirmed project root.
+The only persistent state allowed across sessions is journey.log inside the project root.
 
 Session Start Rules (Strict)
 
 On every session start:
 
-If the project folder has NOT been explicitly created and confirmed in this session:
+If no project folder has been created in this session:
 
-Do NOT inspect the filesystem.
+Do NOT ask for parent directory.
 
-Do NOT run ls.
+Do NOT ask for folder name.
 
-Do NOT search for folders.
+Do NOT inspect parent directories.
 
-Do NOT check for journey.log.
+Do NOT scan the workspace.
 
-Do NOT reference workspace, home directory, or parent directories.
+Instead:
 
-Ask ONLY Step 0.
+Create a new folder in the current working directory named:
 
-Stop and wait.
+lane-project
 
-After Step 0 confirmation and after creating the folder and cd into it:
 
-Treat that directory as the project root.
+cd into it.
+
+Treat it as the project root.
+
+After entering the project root:
 
 Check for journey.log in the current directory ONLY.
 
@@ -40,41 +43,21 @@ If it exists, read it and resume.
 
 If it does not exist, treat as fresh start.
 
-You must never check for journey.log before Step 0 is complete.
+You must never check for journey.log before creating and entering the project folder.
 
-No Option A / Option B branching. Always execute Step 0 first.
+No branching.
+No options.
+No asking for filesystem paths.
 
 Persistence Rules
 
 Write everything that matters into journey.log.
 
-The next session must be able to resume using only that file.
+The next session must resume using only that file.
 
-If journey.log is empty or missing, treat as fresh start.
+If journey.log is missing or empty, treat as fresh start.
 
 If it contains content, summarize and propose the next step.
-
-Step 0: Confirm the Project Folder (Mandatory Gate)
-
-Before doing anything else on a fresh start:
-
-Ask me:
-
-Parent directory
-
-Folder name
-
-Wait for confirmation.
-
-After confirmation:
-
-Create the folder
-
-cd into it
-
-Treat it as the project root
-
-Do not reference or search for any project folder before this step completes.
 
 Step 1: Interview
 
@@ -96,9 +79,10 @@ Initialize git:
 
 git init
 
+
 Create .gitignore
 
-First commit
+Make first commit.
 
 Follow:
 
@@ -130,8 +114,6 @@ npm install -g @lanelayer/cli
 
 
 CLI is source of truth:
-
-CLI (source of truth):
 https://github.com/lanelayer/cli
 
 Always rely on real CLI output for syntax.
@@ -147,7 +129,10 @@ First commit made
 Then:
 
 Create the lane:
+
 lane create <name> --template python
+
+
 or per guide.
 
 Follow:
@@ -206,7 +191,9 @@ https://discord.gg/F9GwH7zzJm
 
 Non-Negotiable Rules
 
-Never inspect the workspace before Step 0.
+Never inspect parent directories.
+
+Never ask for filesystem paths.
 
 Never write lane code before git init and first commit.
 
@@ -218,15 +205,7 @@ Keep journey.log updated at every meaningful milestone.
 
 Start Now
 
-If Step 0 has NOT been completed in this session:
-
-Ask only:
-
-Parent directory
-
-Folder name
-
-Wait.
-
-After Step 0 is complete and you are inside the project root:
-Check for journey.log and proceed accordingly.
+Create lane-project in the current working directory,
+cd into it,
+check for journey.log,
+and proceed accordingly.
