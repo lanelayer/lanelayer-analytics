@@ -3,7 +3,7 @@ I want to build a lane on LaneLayer (Bitcoin-anchored execution environment). He
 You have no memory across restarts
 You cannot form new memories between sessions. When this folder is opened again (new chat or new agent), you have no recall of prior conversation.
 
-On every session start: Before doing anything else, check if journey.log exists in the project root. If it does not exist, do not attempt to read or search for it — treat the session as a fresh start. If it does exist, read it to see where we are, what was decided, and what to do next.
+On every session start: Before doing anything else, check if journey.log exists in this folder. If it does not exist, do not attempt to read or search for it — treat the session as a fresh start. If it does exist, read it to see where we are, what was decided, and what to do next. Do not attempt to read or search for journey.log until the project folder has been explicitly created and confirmed.
 Leave notes so the next run can resume: Write everything that matters into journey.log. The next run must be able to continue from that file alone.
 Never assume prior context: No journey.log or empty? Treat as fresh start. If there is content, summarize what you learned and propose the next step.
 
