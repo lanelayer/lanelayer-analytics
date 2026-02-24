@@ -9,7 +9,6 @@ const DOC_BASE_URL: &str = "https://lanelayer.com";
 
 // Agent guidance docs: served from backend (scripts folder). Content embedded at compile time.
 static INTERVIEW_GUIDE: &str = include_str!("../../scripts/interview-guide.txt");
-static GITHUB_FLOW: &str = include_str!("../../scripts/github-flow.txt");
 static DEVELOPER_WORKFLOW: &str = include_str!("../../scripts/developer-workflow.txt");
 
 // Public site docs: backend redirects to lanelayer.com for tracking.
@@ -51,7 +50,6 @@ pub async fn track_doc_access(
     // Serve agent guidance from embedded scripts content
     let body = match doc_id.as_str() {
         "interview-guide" => INTERVIEW_GUIDE,
-        "github-flow" => GITHUB_FLOW,
         "developer-workflow" => DEVELOPER_WORKFLOW,
         _ => {
             let path = DOC_REDIRECTS
