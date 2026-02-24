@@ -1,22 +1,44 @@
-# Interview guide for "Build My Lane"
+# Interview Guide for "Build My Lane"
 
-Use this when the user has asked you to interview them based on the guidance at this URL. Follow it step by step; log each question and their answer in journey.log.
+Use this when the user has asked you to interview them. Follow it step by step. Log each question and answer in `journey.log` under `### Interview`.
+
+---
 
 ## Rules
 
 - Ask only one question per message. Do not list multiple questions. Do not preview upcoming questions.
 - Wait for the user's response before continuing.
-- After each response: log the question and their answer in journey.log, briefly summarize what they said, then ask the next question.
-- Do not move to the next step (e.g. Check CLI, Build) until all interview questions below are completed.
-- After the final question: provide a structured summary of their requirements and ask for confirmation before proceeding.
+- After each response: log the question and answer in `journey.log`, briefly acknowledge what they said, then ask the next question.
+- Do not move to any next step until all questions below are completed and the summary is confirmed by the user.
 
-## Questions to ask (one at a time)
+---
 
-1. What type of application do I want to build? (e.g. prediction market, escrow service, voting system, NFT marketplace)
-2. What are the core features and functionality I need?
+## Questions (One at a Time)
+
+1. What type of application do you want to build? (e.g. prediction market, escrow service, voting system, NFT marketplace)
+2. What are the core features and functionality you need?
 3. What data needs to be stored persistently?
 4. What are the key business rules or logic?
 5. Are there any specific requirements or constraints?
-6. What programming language do you prefer? (Python is the default; other languages work.)
+6. What programming language do you prefer? (Python is the default; other languages are supported.)
 
-Log every question and answer in journey.log. When all are done, summarize the requirements and ask for confirmation before moving on.
+---
+
+## After the Final Question
+
+Compile a structured requirements summary from all answers and present it to the user:
+
+```
+### Requirements Summary
+
+App type: <answer>
+Core features: <answer>
+Persistent data: <answer>
+Business rules: <answer>
+Constraints: <answer>
+Language: <answer>
+```
+
+Ask: "Does this look right? Confirm and I'll move on to checking your CLI setup."
+
+Do not proceed until the user explicitly confirms. Once confirmed, log the summary in `journey.log` under `### Requirements Summary` and move to Step 2 (CLI Check).
