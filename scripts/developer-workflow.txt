@@ -1,35 +1,114 @@
-# Developer workflow — where to look
+# Developer Workflow — Where to Look
 
 Use this when you need to know the full path from building to a live derived lane. Seek details from the URLs below; don't assume you have the full picture in context.
 
-## 1. GitHub and source control
+---
 
-- Guide the user through repo init, commit flow, repo setup, push, and container packaging.
-- Where to look: fetch the github-flow doc from this API (same base URL as this doc).
+## 1. Build and RISC-V
 
-## 2. Build and RISC-V
+Building a RISC-V container with the CLI; preparing the lane for deployment.
 
-- Building a RISC-V container with the CLI; preparing the lane for deployment.
-- Where to look: https://lanelayer.com/riscv-intent.html (RISC-V intent build, package, upload), https://lanelayer.com/guide-reference.html (create lane, K/V, export).
+Where to look:
+- https://lanelayer.com/riscv-intent.html (RISC-V intent build, package, upload)
+- https://lanelayer.com/guide-reference.html (create lane, K/V, export)
 
-## 3. Deployment
+---
 
-- Push container to a Docker registry (CLI); notify LaneLayer infra for handshake.
-- Returns: live derived lane RPC endpoint (LaneLayer-hosted), backed by Anvil.
-- Where to look: https://lanelayer.com/guide-reference.html#step-7-deploy-to-flyio, CLI lane export prod and deploy commands, https://github.com/lanelayer/cli
+## 2. Commit Checkpoints
 
-## 4. Resilience and escalation
+After each meaningful build milestone, prompt the user to commit:
+```
+git add .
+git commit -m "<descriptive message>"
+```
 
-- Detect and diagnose issues; attempt recovery when safe. If blocked, escalate via CLI or Discord with structured error and context (what was tried, exact error, CLI version, logs).
-- Where to look: https://discord.gg/F9GwH7zzJm, CLI output and health endpoints, https://lanelayer.com/guide-reference.html#step-3-start-development-mode
+You suggest the command. The user runs it. Good commit points: after lane creation, after K/V integration, after core logic is complete, after all local tests pass.
 
-## 5. End state
+---
 
-- Developer has a live derived lane RPC endpoint (LaneLayer, Anvil-backed) and can proceed to frontend or app integration.
+## 3. Local Test Gate (Mandatory Before Deploy)
+
+Before any deployment step, verify locally:
+
+- Test all lane endpoints (make real requests, check responses)
+- Verify K/V persistence (write a value, read it back, confirm match)
+- Confirm container builds cleanly (`lane export prod` or equivalent CLI command)
+
+Do not proceed to deployment until all three pass. If any fail, debug in place using the build docs above.
+
+Prompt a final commit once all pass:
+```
+git add .
+git commit -m "All local tests passing — ready to deploy"
+```
+
+---
+
+## 4. Deployment
+
+Push container to a Docker registry (CLI); notify LaneLayer infra for handshake.
+
+Returns: live derived lane RPC endpoint (LaneLayer-hosted), backed by Anvil.
+
+Where to look:
+- https://lanelayer.com/guide-reference.html#step-7-deploy-to-flyio
+- CLI `lane export prod` and deploy commands
+- https://github.com/lanelayer/cli
+
+After deployment returns an endpoint:
+- Have the user make a test request to confirm it responds
+- Confirm Anvil backing via the response or infra confirmation
+- Only mark deployment complete after live verification passes
+
+---
+
+## 5. Resilience and Escalation
+
+Follow this triage order if anything breaks:
+
+1. **Identify**: Capture exact CLI output or error message
+2. **Classify**:
+   - Code/build error → debug in place, reference build docs
+   - CLI error → check `lane --help`, reference https://github.com/lanelayer/cli
+   - Infra/network error → check health endpoints, retry once
+3. **Recover**: Attempt one fix, log what was tried
+4. **Escalate** if still blocked → help the user post in Discord with this structured payload:
+
+```
+What I'm building: <from journey.log>
+Step I'm on: <current step>
+What I tried: <recovery attempt>
+Exact error: <paste>
+CLI version: <lane --help output>
+```
+
+Discord: https://discord.gg/F9GwH7zzJm
+
+---
+
+## 6. End State
+
+Developer has a live derived lane RPC endpoint (LaneLayer, Anvil-backed).
+
+Present this clearly when reached:
+
+```
+✅ Your lane is live.
+
+RPC Endpoint: <URL>
+Backed by: Anvil
+Status: Live and responding
+
+You can now proceed to frontend or application integration.
+```
+
+Do not skip this handoff. Confirming the endpoint is live and presenting it clearly is the final step of the workflow.
+
+---
 
 ## Quick URLs
 
-- Full build/K/V/deploy: https://lanelayer.com/guide-reference.html
+- Full build / K/V / deploy: https://lanelayer.com/guide-reference.html
 - RISC-V intent: https://lanelayer.com/riscv-intent.html
 - CLI: https://github.com/lanelayer/cli
 - Discord: https://discord.gg/F9GwH7zzJm

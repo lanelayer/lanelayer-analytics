@@ -1,211 +1,250 @@
-Build My Lane
+# Build My Lane
 
 I want to build a lane on LaneLayer (Bitcoin-anchored execution environment). Help me from idea to a live derived lane RPC endpoint. Seek out the information you need from the URLs below. Do not assume everything is in this prompt.
 
-Stateless Agent Rules
+---
+
+## Stateless Agent Rules
 
 You have no memory across restarts.
 You cannot form new memories between sessions.
 When this folder is opened again in a new chat or agent, you have no recall of prior conversation.
 
-The only persistent state allowed across sessions is journey.log inside the project root.
+The only persistent state allowed across sessions is `journey.log` inside the project root.
 
-Session Start Rules (Strict)
+---
+
+## journey.log Schema (Strict)
+
+Every write to `journey.log` must follow this exact structure. Do not freeform write to it.
+
+```
+## Session: <ISO timestamp>
+
+### Interview
+Q: <question>
+A: <user answer>
+... (repeat for all questions)
+
+### Requirements Summary
+<confirmed summary after interview>
+
+### CLI
+- Installed: yes/no
+- Version: <output of lane --help>
+
+### Build
+- Lane name: <name>
+- Template: <template>
+- Checkpoints: <list with timestamps>
+- Architectural decisions: <list>
+
+### Local Test Gate
+- Endpoints tested: yes/no
+- K/V persistence verified: yes/no
+- Container built successfully: yes/no
+- All passed: yes/no — DO NOT proceed to deploy until this is yes
+
+### Deploy
+- Container pushed to registry: yes/no
+- LaneLayer infra notified: yes/no
+- RPC endpoint returned: <endpoint URL or "pending">
+- Endpoint verified live: yes/no
+- Anvil-backed confirmed: yes/no
+
+### Resilience
+- Issues encountered: <list>
+- Recovery attempted: <what was tried>
+- Escalated: yes/no
+
+### End State
+- RPC Endpoint: <URL>
+- Status: live / pending / failed
+- Developer cleared for frontend: yes/no
+```
+
+A new session must reconstruct full context from this file alone. If a field is unknown, write `unknown` — never omit the field.
+
+---
+
+## Session Start Rules (Strict)
 
 On every session start:
 
-If no project folder has been created in this session:
+- Do NOT inspect parent directories.
+- Do NOT scan the workspace.
+- Do NOT ask for folder names or paths.
+- Treat the current working directory as the project root.
 
-Do NOT ask for parent directory.
+Then:
+- Check for `journey.log` in the current directory ONLY.
+- If it exists, read it and resume from the last incomplete step.
+- If it does not exist, treat as fresh start and create it.
 
-Do NOT ask for folder name.
+No branching. No options. No asking for filesystem paths.
 
-Do NOT inspect parent directories.
+---
 
-Do NOT scan the workspace.
-
-Instead:
-
-Create a new folder in the current working directory named:
-
-lane-project
-
-
-cd into it.
-
-Treat it as the project root.
-
-After entering the project root:
-
-Check for journey.log in the current directory ONLY.
-
-If it exists, read it and resume.
-
-If it does not exist, treat as fresh start.
-
-You must never check for journey.log before creating and entering the project folder.
-
-No branching.
-No options.
-No asking for filesystem paths.
-
-Persistence Rules
-
-Write everything that matters into journey.log.
-
-The next session must resume using only that file.
-
-If journey.log is missing or empty, treat as fresh start.
-
-If it contains content, summarize and propose the next step.
-
-Step 1: Interview
+## Step 1: Interview
 
 Fetch and follow:
 
-Interview questions:
-{{API_URL}}/api/v1/docs/interview-guide
+Interview questions: `{{API_URL}}/api/v1/docs/interview-guide`
 
-Ask all required questions.
-Log all answers in journey.log.
+Ask all required questions one at a time.
+Log all answers in `journey.log` under `### Interview`.
 
-Do not proceed to Git until the interview is complete.
+Do not proceed to Step 2 until the interview is complete and the requirements summary is confirmed by the user.
 
-Step 2: Git and GitHub (Before Writing Code)
+---
 
-Immediately after the interview and before any lane code:
-
-Initialize git:
-
-git init
-
-
-Create .gitignore
-
-Make first commit.
-
-Follow:
-
-Git/GitHub flow:
-{{API_URL}}/api/v1/docs/github-flow
-
-You must:
-
-Provide exact git commands.
-
-I run them.
-
-You do not run them.
-
-Log each step in journey.log.
-
-No lane code before first commit.
-
-Step 3: CLI Check
+## Step 2: CLI Check
 
 Have me run:
-
+```
 lane --help
-
+```
 
 If missing:
-
+```
 npm install -g @lanelayer/cli
+```
 
+Log the CLI version in `journey.log` under `### CLI`.
 
-CLI is source of truth:
-https://github.com/lanelayer/cli
+CLI is source of truth: `https://github.com/lanelayer/cli`
 
-Always rely on real CLI output for syntax.
+Always rely on real CLI output for syntax. Never assume command flags or options.
 
-Step 4: Build
+---
 
-Only after:
-
-Repo initialized
-
-First commit made
-
-Then:
+## Step 3: Build
 
 Create the lane:
-
+```
 lane create <name> --template python
-
-
-or per guide.
-
-Follow:
-
-Build guide (setup, K/V, deploy):
-{{API_URL}}/api/v1/docs/guide
-
-K/V API:
-{{API_URL}}/api/v1/docs/kv-api
-
-Commit meaningful checkpoints.
-Log architectural decisions in journey.log.
-
-Step 5: Test and Deploy
+```
+(or per guide)
 
 Follow:
+- Build guide: `{{API_URL}}/api/v1/docs/guide`
+- K/V API: `{{API_URL}}/api/v1/docs/kv-api`
 
-Full workflow (RISC-V, deployment, resilience):
-{{API_URL}}/api/v1/docs/developer-workflow
+After each meaningful milestone (lane created, K/V integrated, core logic complete), prompt me to commit:
+```
+git add .
+git commit -m "<descriptive message>"
+```
 
-Deployment steps:
-{{API_URL}}/api/v1/docs/deployment
+You suggest the commands. I run them. Log architectural decisions and commit checkpoints in `journey.log` under `### Build`.
 
-Guide testing of:
+---
 
-Endpoints
+## Step 4: Local Test Gate (Mandatory — Do Not Skip)
 
-K/V persistence
+Before any deployment, guide me through all of the following. Do not proceed to Step 5 until every item is confirmed:
 
-Container packaging
+- [ ] Test all lane endpoints locally
+- [ ] Verify K/V persistence (write a value, read it back, confirm match)
+- [ ] Confirm the container builds successfully (`lane export prod` or equivalent)
 
-Registry push
+Ask me to confirm each one. If any fail, stop and debug before continuing.
 
-LaneLayer infra deployment
+Once all pass, prompt a final commit:
+```
+git add .
+git commit -m "All local tests passing — ready to deploy"
+```
 
-Live derived RPC endpoint
+Log results in `journey.log` under `### Local Test Gate`. Set `All passed: yes` only when all three are confirmed.
 
-Test before deploy.
+---
 
-If We Get Stuck
+## Step 5: Deploy
 
-Break down the issue.
-Point to the docs above.
-If still stuck, help me post in Discord with:
+Only after the Local Test Gate is fully passed:
 
-What I’m building
+Follow: `{{API_URL}}/api/v1/docs/developer-workflow` and `{{API_URL}}/api/v1/docs/deployment`
 
-What I tried
+Guide me through:
+1. Push container to Docker registry (CLI)
+2. Notify LaneLayer infra (handshake)
+3. Wait for the live derived RPC endpoint to be returned
 
-Exact error
+After the endpoint is returned:
+- Have me make a test request to confirm it responds
+- Confirm it is Anvil-backed
+- Only mark deployment complete after live verification passes
 
-CLI version
+Log all results in `journey.log` under `### Deploy`.
 
-Help / escalation:
-https://discord.gg/F9GwH7zzJm
+---
 
-Non-Negotiable Rules
+## Step 6: End State Handoff
 
-Never inspect parent directories.
+Once the endpoint is verified live, present this clearly:
 
-Never ask for filesystem paths.
+```
+✅ Your lane is live.
 
-Never write lane code before git init and first commit.
+RPC Endpoint: <URL>
+Backed by: Anvil
+Status: Live and responding
 
-CLI is source of truth.
+You can now proceed to frontend or application integration.
+Use this endpoint as your RPC target.
+```
 
-Use K/V API for persistence.
+Log in `journey.log` under `### End State`:
+- RPC Endpoint URL
+- Status: live
+- Developer cleared for frontend: yes
 
-Keep journey.log updated at every meaningful milestone.
+This is the final step. Do not skip it.
 
-Start Now
+---
 
-Create lane-project in the current working directory,
-cd into it,
-check for journey.log,
-and proceed accordingly.
+## Resilience & Recovery
+
+If anything fails at any step, follow this triage order:
+
+1. **Identify**: What exactly failed? (CLI output, endpoint response, build error)
+2. **Classify**:
+   - Build/code error → debug in place, reference the build docs
+   - CLI error → check `lane --help`, reference `https://github.com/lanelayer/cli`
+   - Infra/deployment error → check health endpoints, retry once
+3. **Recover**: Attempt one fix. Log what was tried in `journey.log`.
+4. **Escalate** if still blocked — help me post in Discord with this exact payload:
+
+```
+What I'm building: <from journey.log Requirements Summary>
+Step I'm on: <current step>
+What I tried: <recovery attempt>
+Exact error: <paste>
+CLI version: <from journey.log>
+```
+
+Discord: `https://discord.gg/F9GwH7zzJm`
+
+Log all issues and outcomes in `journey.log` under `### Resilience`.
+
+---
+
+## Non-Negotiable Rules
+
+- Never inspect parent directories.
+- Never ask for filesystem paths.
+- Never deploy before the Local Test Gate is fully passed.
+- Never declare the journey complete without a verified live endpoint.
+- CLI is the source of truth — always use real output, never assume syntax.
+- Use K/V API for all persistence.
+- Keep `journey.log` updated at every meaningful milestone using the defined schema.
+- Commit checkpoints are mandatory at the milestones defined in Steps 3 and 4.
+
+---
+
+## Start Now
+
+Check for `journey.log` in the current directory.
+If it exists, read it and resume from the last incomplete step.
+If it does not exist, start fresh with Step 1.
