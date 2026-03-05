@@ -14,12 +14,24 @@ The only persistent state allowed across sessions is `journey.log` inside the pr
 
 ---
 
+## Session Tracking
+
+Every interaction with a LaneLayer backend must carry the session ID for telemetry. The session ID for this prompt instance is defined at the bottom of this file after `Session:`.
+
+When fetching any LaneLayer backend URL, append `?session={{SESSION_ID}}` to the URL. When a URL already has query parameters, use `&session={{SESSION_ID}}` instead.
+
+When setting `LANE_NOTIFY_URL`, append the session ID as a query parameter.
+
+This applies to every HTTP request the agent makes to any `lanelayer-analytics.fly.dev` or `cli-backend-notification-server.fly.dev` endpoint. No exceptions.
+
+---
+
 ## journey.log Schema (Strict)
 
 Every write to `journey.log` must follow this exact structure. Do not freeform write to it.
 
 ```
-## Session: <ISO timestamp>
+## Session: {{SESSION_ID}} | <ISO timestamp>
 
 ### Interview
 Q: <question>
@@ -34,23 +46,27 @@ A: <user answer>
 - Version: <output of lane --help>
 
 ### Build
-- Lane name: <name>
+- Lane name: <n>
 - Template: <template>
 - Checkpoints: <list with timestamps>
 - Architectural decisions: <list>
 
 ### Local Test Gate
+- Test method: <host | container-internal | both>
 - Endpoints tested: yes/no
+- Endpoint test results: <list of endpoints with status codes and response summaries>
 - K/V persistence verified: yes/no
+- K/V test detail: <value written, value read back, match: yes/no>
 - Container built successfully: yes/no
+- Container build output: <summary of build output or error>
 - All passed: yes/no — DO NOT proceed to deploy until this is yes
 
 ### Deploy
+- Command used: <exact command with env vars>
+- Full CLI output: <every line of output from lane push>
 - Container pushed to registry: yes/no
 - LaneLayer infra notified: yes/no
-- RPC endpoint returned: <endpoint URL or "pending">
-- Endpoint verified live: yes/no
-- Anvil-backed confirmed: yes/no
+- Notification response: <full JSON response from notification server>
 
 ### Resilience
 - Issues encountered: <list>
@@ -58,8 +74,7 @@ A: <user answer>
 - Escalated: yes/no
 
 ### End State
-- RPC Endpoint: <URL>
-- Status: live / pending / failed
+- Status: deployed / pending / failed
 - Developer cleared for frontend: yes/no
 ```
 
@@ -89,7 +104,7 @@ No branching. No options. No asking for filesystem paths.
 
 Fetch and follow:
 
-Interview questions: `{{API_URL}}/api/v1/docs/interview-guide`
+Interview questions: `{{API_URL}}/api/v1/docs/interview-guide?session={{SESSION_ID}}`
 
 Ask all required questions one at a time.
 Log all answers in `journey.log` under `### Interview`.
@@ -100,14 +115,16 @@ Do not proceed to Step 2 until the interview is complete and the requirements su
 
 ## Step 2: CLI Check
 
-Have me run:
+Install the exact version:
 ```
-lane --help
+npm install -g @lanelayer/cli@0.4.16
 ```
 
-If missing:
+Do not install any other version. If a different version is already installed, reinstall with the command above.
+
+Then run:
 ```
-npm install -g @lanelayer/cli
+lane --help
 ```
 
 Log the CLI version in `journey.log` under `### CLI`.
@@ -122,85 +139,132 @@ Always rely on real CLI output for syntax. Never assume command flags or options
 
 Create the lane:
 ```
-lane create <name> --template python
+lane create <n> --template python
 ```
 (or per guide)
 
 Follow:
-- Build guide: `{{API_URL}}/api/v1/docs/guide`
-- K/V API: `{{API_URL}}/api/v1/docs/kv-api`
+- Build guide: `{{API_URL}}/api/v1/docs/guide?session={{SESSION_ID}}`
+- K/V API: `{{API_URL}}/api/v1/docs/kv-api?session={{SESSION_ID}}`
 
-After each meaningful milestone (lane created, K/V integrated, core logic complete), prompt me to commit:
+After each meaningful milestone (lane created, K/V integrated, core logic complete), run:
 ```
 git add .
 git commit -m "<descriptive message>"
 ```
 
-You suggest the commands. I run them. Log architectural decisions and commit checkpoints in `journey.log` under `### Build`.
+Log architectural decisions and commit checkpoints in `journey.log` under `### Build`.
 
 ---
 
-## Step 4: Local Test Gate (Mandatory — Do Not Skip)
+## Step 4: Local Test Gate (Mandatory — Agent Executes Everything)
 
-Before any deployment, guide me through all of the following. Do not proceed to Step 5 until every item is confirmed:
+Before any deployment, you (the agent) must execute and verify all of the following yourself. Do not ask the user to run commands, paste output, or confirm results. You run every command, read every output, and determine pass/fail.
 
-- [ ] Test all lane endpoints locally
-- [ ] Verify K/V persistence (write a value, read it back, confirm match)
-- [ ] Confirm the container builds successfully (`lane export prod` or equivalent)
+Do not proceed to Step 5 until every test passes.
 
-Ask me to confirm each one. If any fail, stop and debug before continuing.
+### How to reach the lane
 
-Once all pass, prompt a final commit:
+Lanes run inside containers. Try host-level first, fall back to container-internal if needed:
+
+**Method A: Host-level (try first)**
 ```
-git add .
-git commit -m "All local tests passing — ready to deploy"
+curl http://localhost:8080/<endpoint>
 ```
 
-Log results in `journey.log` under `### Local Test Gate`. Set `All passed: yes` only when all three are confirmed.
+**Method B: Container-internal (use if Method A fails)**
+
+If host-level requests fail (curl error 52, connection refused, status 000), this is a container networking issue — NOT a lane failure. Switch to container-internal testing immediately. Do not escalate. Do not stop.
+```
+lane exec -- curl -s http://localhost:8080/health
+```
+
+If `lane exec` has issues with complex arguments, write a test script first:
+```
+cat > /tmp/test_endpoints.sh << 'EOF'
+#!/bin/bash
+curl -s -w "\nHTTP %{http_code}\n" http://localhost:8080/health
+curl -s -w "\nHTTP %{http_code}\n" http://localhost:8080/kv-test
+EOF
+chmod +x /tmp/test_endpoints.sh
+lane exec -- bash /tmp/test_endpoints.sh
+```
+
+Adapt the script to include ALL endpoints the lane exposes. Container-internal test results are fully valid.
+
+### Test 1: Test all lane endpoints
+
+1. Start the lane locally if not already running.
+2. Hit every endpoint. Read every response. Confirm correct status codes and response shapes.
+3. If any endpoint fails from inside the container, debug and re-test.
+4. Log every endpoint, status code, and response summary in `journey.log`.
+
+### Test 2: Verify K/V persistence
+
+1. Write a test key-value pair (`__test_key` = `lanelayer_test_<timestamp>`).
+2. Read it back. Compare. They must match exactly.
+3. Delete the test key.
+4. Log written value, read value, and match result in `journey.log`.
+
+### Test 3: Confirm container builds successfully
+
+1. Run: `lane export prod ./dist-prod`
+2. Read the output. Confirm it completes without errors.
+3. Log the build summary in `journey.log`.
+
+### Gate check
+
+After all three pass:
+- Set `All passed: yes` in `journey.log`.
+- Run:
+  ```
+  git add .
+  git commit -m "All local tests passing — ready to deploy"
+  ```
+
+If any test fails, debug in place and re-test. Do not proceed until all pass.
 
 ---
 
 ## Step 5: Deploy
 
-Only after the Local Test Gate is fully passed:
+Only after the Local Test Gate is fully passed.
 
-Follow: `{{API_URL}}/api/v1/docs/developer-workflow` and `{{API_URL}}/api/v1/docs/deployment`
+### How deployment works
 
-Guide me through:
-1. Push container to Docker registry (CLI)
-2. Notify LaneLayer infra (handshake)
-3. Wait for the live derived RPC endpoint to be returned
+`@lanelayer/cli@0.4.16` handles deployment in a single command. It does two things:
 
-After the endpoint is returned:
-- Have me make a test request to confirm it responds
-- Confirm it is Anvil-backed
-- Only mark deployment complete after live verification passes
+1. Builds a production RISC-V container and pushes it to the Docker registry.
+2. Notifies LaneLayer infra via the notification server.
+
+The notification is triggered by setting the `LANE_NOTIFY_URL` environment variable. Without it, the push happens but infra is not notified.
+
+### Deploy command
+
+Run this exact command (substitute `<n>` with the lane name from `journey.log`):
+
+```
+LANE_NOTIFY_URL=https://cli-backend-notification-server.fly.dev/notify?session={{SESSION_ID}} lane push <n>:latest
+```
+
+Do not modify this command. Do not ask the user what registry to use. Do not use a full registry URL. The CLI handles the registry. The short path (`<n>:latest`) is correct.
+
+### After running the command
+
+1. Read the full CLI output. Log every line in `journey.log` under `### Deploy → Full CLI output`.
+2. Confirm the push succeeded (image pushed to registry, no errors).
+3. Confirm the notification was sent and a response was received. Log the full notification response JSON in `journey.log` under `### Deploy → Notification response`.
+4. Log `Container pushed to registry: yes` and `LaneLayer infra notified: yes`.
+
+If the push fails, read the error, attempt one fix, and retry. If it fails again, go to Resilience & Recovery.
+
+After a successful push and notification, run:
+```
+git add .
+git commit -m "Deployed — container pushed and infra notified"
+```
 
 Log all results in `journey.log` under `### Deploy`.
-
----
-
-## Step 6: End State Handoff
-
-Once the endpoint is verified live, present this clearly:
-
-```
-✅ Your lane is live.
-
-RPC Endpoint: <URL>
-Backed by: Anvil
-Status: Live and responding
-
-You can now proceed to frontend or application integration.
-Use this endpoint as your RPC target.
-```
-
-Log in `journey.log` under `### End State`:
-- RPC Endpoint URL
-- Status: live
-- Developer cleared for frontend: yes
-
-This is the final step. Do not skip it.
 
 ---
 
@@ -210,8 +274,10 @@ If anything fails at any step, follow this triage order:
 
 1. **Identify**: What exactly failed? (CLI output, endpoint response, build error)
 2. **Classify**:
+   - Host networking issue (curl 52, connection refused, status 000) → NOT a failure. Switch to container-internal testing. Do not escalate.
    - Build/code error → debug in place, reference the build docs
    - CLI error → check `lane --help`, reference `https://github.com/lanelayer/cli`
+   - Push error → verify `LANE_NOTIFY_URL=https://cli-backend-notification-server.fly.dev/notify?session={{SESSION_ID}}` is set, retry
    - Infra/deployment error → check health endpoints, retry once
 3. **Recover**: Attempt one fix. Log what was tried in `journey.log`.
 4. **Escalate** if still blocked — help me post in Discord with this exact payload:
@@ -221,7 +287,9 @@ What I'm building: <from journey.log Requirements Summary>
 Step I'm on: <current step>
 What I tried: <recovery attempt>
 Exact error: <paste>
-CLI version: <from journey.log>
+CLI version: @lanelayer/cli@0.4.16
+Session ID: {{SESSION_ID}}
+Command used: LANE_NOTIFY_URL=https://cli-backend-notification-server.fly.dev/notify?session={{SESSION_ID}} lane push <n>:latest
 ```
 
 Discord: `https://discord.gg/F9GwH7zzJm`
@@ -232,14 +300,20 @@ Log all issues and outcomes in `journey.log` under `### Resilience`.
 
 ## Non-Negotiable Rules
 
+- Always append `?session={{SESSION_ID}}` (or `&session={{SESSION_ID}}`) to every LaneLayer backend URL. No backend request without a session ID.
+- The agent executes all commands, reads all output, and determines all pass/fail results. Never ask the user to run a command, paste output, or confirm a result.
+- Always install `@lanelayer/cli@0.4.16`. No other version.
+- Always set `LANE_NOTIFY_URL=https://cli-backend-notification-server.fly.dev/notify?session={{SESSION_ID}}` when running `lane push`.
+- Always use the short registry path (`<n>:latest`). Never specify a full registry URL.
+- Never ask the user what registry to use. The CLI default is correct.
+- Never escalate host networking issues as lane failures. If host curl fails, switch to container-internal testing and keep going.
 - Never inspect parent directories.
 - Never ask for filesystem paths.
 - Never deploy before the Local Test Gate is fully passed.
-- Never declare the journey complete without a verified live endpoint.
 - CLI is the source of truth — always use real output, never assume syntax.
 - Use K/V API for all persistence.
 - Keep `journey.log` updated at every meaningful milestone using the defined schema.
-- Commit checkpoints are mandatory at the milestones defined in Steps 3 and 4.
+- Commit checkpoints are mandatory at the milestones defined in Steps 3, 4, and 5.
 
 ---
 
@@ -248,3 +322,6 @@ Log all issues and outcomes in `journey.log` under `### Resilience`.
 Check for `journey.log` in the current directory.
 If it exists, read it and resume from the last incomplete step.
 If it does not exist, start fresh with Step 1.
+
+---
+LaneLayer Prompt 1.1.0 | CLI: @lanelayer/cli@0.4.16 | Session: {{SESSION_ID}}
