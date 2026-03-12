@@ -1,0 +1,20 @@
+{
+  "name": "basic_python_lane",
+  "terminal": {
+    "developer_profile": {
+      "app_type": "A simple escrow service.",
+      "core_features": "Create escrow, release, and refund endpoints with basic validation.",
+      "persistent_data": "Escrow records keyed by escrow_id; status and amounts; minimal audit trail.",
+      "business_rules": "Only the depositor can refund before release; only the recipient can claim after release conditions are met.",
+      "constraints": "Keep it minimal; Python is fine; use the recommended template.",
+      "language": "Python"
+    },
+    "command_outputs": {
+      "lane --help": "prompt-tests/fixtures/lane_help.txt"
+    }
+  },
+  "stop_after": {
+    "max_turns": 60
+  }
+}
+
