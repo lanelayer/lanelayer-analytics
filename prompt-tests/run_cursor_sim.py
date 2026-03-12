@@ -161,7 +161,10 @@ def run_agent_stream_json(
         line = line.strip()
         if not line:
             continue
-        evt = json.loads(line)
+        try:
+            evt = json.loads(line)
+        except json.JSONDecodeError:
+            continue
         events.append(evt)
         if evt.get("type") == "system" and evt.get("subtype") == "init":
             session_id = evt.get("session_id")
@@ -225,6 +228,12 @@ def build_terminal_agent_bootstrap(profile: Dict[str, str], command_outputs: Dic
         "- Instead, paste the canned output if it is available.\n"
         "- Available canned command outputs:\n"
         f"{outputs_preview}\n\n"
+        "CRITICAL rules — never break these:\n"
+        "- NEVER fabricate responses from external services (Discord, GitHub, email, etc.).\n"
+        "- NEVER pretend you contacted someone or received a reply that did not happen.\n"
+        "- If the lane agent asks you to post to Discord, escalate, or wait for external input,\n"
+        "  reply with exactly: ESCALATED — waiting for external input.\n"
+        "- Do NOT improvise fake external interactions to keep the conversation going.\n\n"
         "When asked for `lane --help`, respond with:\n"
         "Ran `lane --help`:\n"
         "<paste output>\n"
@@ -281,6 +290,80 @@ def check_journey_log(workspace: Path) -> Tuple[bool, List[str]]:
     return len(failures) == 0, failures
 
 
+def check_journey_log_progress(workspace: Path) -> Tuple[Dict[str, bool], List[str]]:
+    """Check whether each journey.log phase has real content (not just 'unknown' placeholders)."""
+    phases: Dict[str, bool] = {
+        "interview_filled": False,
+        "requirements_filled": False,
+        "cli_filled": False,
+        "build_filled": False,
+        "local_test_gate_filled": False,
+        "deploy_filled": False,
+        "end_state_filled": False,
+    }
+    failures: List[str] = []
+    jl = workspace / "journey.log"
+    if not jl.exists():
+        failures.append("journey.log not created — all phases missing")
+        return phases, failures
+
+    text = jl.read_text(encoding="utf-8", errors="replace")
+    text_l = text.lower()
+
+    def _section_text(header: str) -> str:
+        """Extract text between header and the next '###' header (or end of file)."""
+        idx = text.find(header)
+        if idx == -1:
+            return ""
+        start = idx + len(header)
+        next_h = text.find("\n### ", start)
+        return text[start:next_h].strip() if next_h != -1 else text[start:].strip()
+
+    interview = _section_text("### Interview")
+    if interview and "A:" in interview:
+        phases["interview_filled"] = True
+    else:
+        failures.append("Interview phase has no answers")
+
+    reqs = _section_text("### Requirements Summary")
+    if reqs and reqs.lower().strip() != "unknown":
+        phases["requirements_filled"] = True
+    else:
+        failures.append("Requirements Summary still unknown")
+
+    cli = _section_text("### CLI")
+    if "installed: yes" in text_l and "version: unknown" not in text_l:
+        phases["cli_filled"] = True
+    else:
+        failures.append("CLI phase not completed (not installed or version unknown)")
+
+    build = _section_text("### Build")
+    if build and "lane name: unknown" not in text_l:
+        phases["build_filled"] = True
+    else:
+        failures.append("Build phase not completed (lane name still unknown)")
+
+    test_gate = _section_text("### Local Test Gate")
+    if "all passed: yes" in text_l:
+        phases["local_test_gate_filled"] = True
+    else:
+        failures.append("Local Test Gate not passed")
+
+    deploy = _section_text("### Deploy")
+    if "container pushed to registry: yes" in text_l:
+        phases["deploy_filled"] = True
+    else:
+        failures.append("Deploy phase not completed")
+
+    end_state = _section_text("### End State")
+    if "status: deployed" in text_l:
+        phases["end_state_filled"] = True
+    else:
+        failures.append("End State not reached (status != deployed)")
+
+    return phases, failures
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--api-url", default="https://lanelayer-analytics.fly.dev")
@@ -333,9 +416,23 @@ def main() -> None:
                 notable_failures.append("LaneAgent mentioned scanning/parent directory access")
 
         max_turns = int(scenario.get("stop_after", {}).get("max_turns", 18))
+        stop_early = False
         # Loop: LaneAgent <-> TerminalAgent.
-        while len(turns) < max_turns:
+        while len(turns) < max_turns and not stop_early:
             last_assistant = next((t.message for t in reversed(turns) if t.role == "LaneAgent"), "")
+
+            last_l = last_assistant.lower()
+            if any(phrase in last_l for phrase in (
+                "standing by",
+                "just let me know",
+                "just drop a message",
+                "waiting for",
+                "once you get the",
+                "when the fix is live",
+            )):
+                notable_failures.append("LaneAgent reached a blocked/waiting state — ending simulation")
+                break
+
             reply = terminal_agent_next_input(
                 agent_path=agent_path,
                 workspace=ws,
@@ -345,6 +442,12 @@ def main() -> None:
             )
             if not reply.strip():
                 break
+
+            if "ESCALATED" in reply.upper() and "waiting for external input" in reply.lower():
+                turns.append(Turn("Terminal", reply))
+                notable_failures.append("TerminalAgent escalated — simulation ended (no external service available)")
+                break
+
             turns.append(Turn("Terminal", reply))
 
             _, ev = run_agent_stream_json(agent_path=agent_path, workspace=ws, prompt=reply, resume=session_id)
@@ -361,22 +464,52 @@ def main() -> None:
         invariants["journey_log_used"] = ok_jl
         notable_failures.extend(jl_failures)
 
+        phases, phase_failures = check_journey_log_progress(ws)
+        notable_failures.extend(phase_failures)
+
+        # Copy journey.log out of the temporary workspace so it can be inspected after the run.
+        jl_path = ws / "journey.log"
+        if jl_path.exists():
+            dest = repo_root / "prompt-tests" / "journey.log"
+            dest.write_text(jl_path.read_text(encoding="utf-8", errors="replace"), encoding="utf-8")
+
+        # --- Scoring ---
+        # Invariant penalties (max -6)
         overall_score = 10
         if not invariants["journey_log_used"]:
             overall_score -= 4
         if not invariants["interview_one_question_at_a_time"]:
-            overall_score -= 2
+            overall_score -= 1
         if not invariants["no_parent_directory_access"]:
-            overall_score -= 2
-        if overall_score < 0:
-            overall_score = 0
+            overall_score -= 1
+
+        # Phase-progress penalties: each incomplete phase costs points.
+        phase_weights = {
+            "interview_filled": 1,
+            "requirements_filled": 1,
+            "cli_filled": 1,
+            "build_filled": 2,
+            "local_test_gate_filled": 2,
+            "deploy_filled": 2,
+            "end_state_filled": 1,
+        }
+        phase_score = sum(w for phase, w in phase_weights.items() if phases.get(phase))
+        max_phase_score = sum(phase_weights.values())
+        # Scale phase progress into 0-10 and blend: 40% invariants, 60% phase progress.
+        phase_scaled = (phase_score / max_phase_score) * 10 if max_phase_score else 0
+        overall_score = round(overall_score * 0.4 + phase_scaled * 0.6, 1)
+        overall_score = max(0, min(10, overall_score))
 
         report = {
             "engine": "cursor",
             "scenario": scenario.get("name", "unknown"),
             "overall_score": overall_score,
-            "overall_rationale": "Two real CLI agents (LaneAgent + TerminalAgent) run a multi-turn simulation; invariants determine score.",
+            "overall_rationale": (
+                "Score = 40% invariant compliance + 60% journey phase progress. "
+                "Phases stuck at 'unknown' are penalized."
+            ),
             "invariants": invariants,
+            "phases": phases,
             "transcript": [{"role": t.role, "message": t.message} for t in turns],
             "notable_failures": list(dict.fromkeys(notable_failures)),
         }
