@@ -30,6 +30,7 @@ This applies to every HTTP request the agent makes to any `lanelayer-analytics.f
 
 Every write to `journey.log` must follow this exact structure. Do not freeform write to it.
 
+
 ```
 ## Session: {{SESSION_ID}} | <ISO timestamp>
 
@@ -37,6 +38,11 @@ Every write to `journey.log` must follow this exact structure. Do not freeform w
 Q: <question>
 A: <user answer>
 ... (repeat for all questions)
+
+### Registration
+Email: <email>
+Verified: yes/no
+Verified at: <timestamp>
 
 ### Requirements Summary
 <confirmed summary after interview>
@@ -113,19 +119,57 @@ Do not proceed to Step 2 until the interview is complete and the requirements su
 
 ---
 
-## Step 2: CLI Check
+## Step 2: Email Registration
+
+After the interview is confirmed, ask the developer for their email address.
+
+Register the email by sending a POST request:
+
+
+POST {{API_URL}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+"email": "<developer_email>",
+"session_id": "{{SESSION_ID}}"
+}
+
+
+Tell the developer to check their inbox for a 6-digit verification code.
+
+Once they provide the code, verify it:
+
+
+POST {{API_URL}}/api/v1/auth/verify
+Content-Type: application/json
+
+{
+"session_id": "{{SESSION_ID}}",
+"code": "<6_digit_code>"
+}
+
+
+If `"verified": false`, the code is wrong. Ask the developer to re-check and try again.
+
+Do not proceed to Step 3 until the verification response shows `"verified": true`.
+
+Log the registration in `journey.log` under `### Registration`.
+
+---
+
+## Step 3: CLI Check
 
 Install the exact version:
-```
+
 npm install -g @lanelayer/cli@0.4.16
-```
+
 
 Do not install any other version. If a different version is already installed, reinstall with the command above.
 
 Then run:
-```
+
 lane --help
-```
+
 
 Log the CLI version in `journey.log` under `### CLI`.
 
@@ -135,12 +179,12 @@ Always rely on real CLI output for syntax. Never assume command flags or options
 
 ---
 
-## Step 3: Build
+## Step 4: Build
 
 Create the lane:
-```
+
 lane create <n> --template python
-```
+
 (or per guide)
 
 Follow:
@@ -148,39 +192,39 @@ Follow:
 - K/V API: `{{API_URL}}/api/v1/docs/kv-api?session={{SESSION_ID}}`
 
 After each meaningful milestone (lane created, K/V integrated, core logic complete), run:
-```
+
 git add .
 git commit -m "<descriptive message>"
-```
+
 
 Log architectural decisions and commit checkpoints in `journey.log` under `### Build`.
 
 ---
 
-## Step 4: Local Test Gate (Mandatory — Agent Executes Everything)
+## Step 5: Local Test Gate (Mandatory — Agent Executes Everything)
 
 Before any deployment, you (the agent) must execute and verify all of the following yourself. Do not ask the user to run commands, paste output, or confirm results. You run every command, read every output, and determine pass/fail.
 
-Do not proceed to Step 5 until every test passes.
+Do not proceed to Step 6 until every test passes.
 
 ### How to reach the lane
 
 Lanes run inside containers. Try host-level first, fall back to container-internal if needed:
 
 **Method A: Host-level (try first)**
-```
+
 curl http://localhost:8080/<endpoint>
-```
+
 
 **Method B: Container-internal (use if Method A fails)**
 
 If host-level requests fail (curl error 52, connection refused, status 000), this is a container networking issue — NOT a lane failure. Switch to container-internal testing immediately. Do not escalate. Do not stop.
-```
+
 lane exec -- curl -s http://localhost:8080/health
-```
+
 
 If `lane exec` has issues with complex arguments, write a test script first:
-```
+
 cat > /tmp/test_endpoints.sh << 'EOF'
 #!/bin/bash
 curl -s -w "\nHTTP %{http_code}\n" http://localhost:8080/health
@@ -188,7 +232,7 @@ curl -s -w "\nHTTP %{http_code}\n" http://localhost:8080/kv-test
 EOF
 chmod +x /tmp/test_endpoints.sh
 lane exec -- bash /tmp/test_endpoints.sh
-```
+
 
 Adapt the script to include ALL endpoints the lane exposes. Container-internal test results are fully valid.
 
@@ -217,16 +261,16 @@ Adapt the script to include ALL endpoints the lane exposes. Container-internal t
 After all three pass:
 - Set `All passed: yes` in `journey.log`.
 - Run:
-  ```
-  git add .
-  git commit -m "All local tests passing — ready to deploy"
-  ```
+
+git add .
+git commit -m "All local tests passing — ready to deploy"
+
 
 If any test fails, debug in place and re-test. Do not proceed until all pass.
 
 ---
 
-## Step 5: Deploy
+## Step 6: Deploy
 
 Only after the Local Test Gate is fully passed.
 
@@ -243,9 +287,9 @@ The notification is triggered by setting the `LANE_NOTIFY_URL` environment varia
 
 Run this exact command (substitute `<n>` with the lane name from `journey.log`):
 
-```
+
 LANE_NOTIFY_URL=https://cli-backend-notification-server.fly.dev/notify?session={{SESSION_ID}} lane push <n>:latest
-```
+
 
 Do not modify this command. Do not ask the user what registry to use. Do not use a full registry URL. The CLI handles the registry. The short path (`<n>:latest`) is correct.
 
@@ -259,10 +303,10 @@ Do not modify this command. Do not ask the user what registry to use. Do not use
 If the push fails, read the error, attempt one fix, and retry. If it fails again, go to Resilience & Recovery.
 
 After a successful push and notification, run:
-```
+
 git add .
 git commit -m "Deployed — container pushed and infra notified"
-```
+
 
 Log all results in `journey.log` under `### Deploy`.
 
@@ -282,7 +326,7 @@ If anything fails at any step, follow this triage order:
 3. **Recover**: Attempt one fix. Log what was tried in `journey.log`.
 4. **Escalate** if still blocked — help me post in Discord with this exact payload:
 
-```
+
 What I'm building: <from journey.log Requirements Summary>
 Step I'm on: <current step>
 What I tried: <recovery attempt>
@@ -290,7 +334,7 @@ Exact error: <paste>
 CLI version: @lanelayer/cli@0.4.16
 Session ID: {{SESSION_ID}}
 Command used: LANE_NOTIFY_URL=https://cli-backend-notification-server.fly.dev/notify?session={{SESSION_ID}} lane push <n>:latest
-```
+
 
 Discord: `https://discord.gg/F9GwH7zzJm`
 
@@ -313,7 +357,7 @@ Log all issues and outcomes in `journey.log` under `### Resilience`.
 - CLI is the source of truth — always use real output, never assume syntax.
 - Use K/V API for all persistence.
 - Keep `journey.log` updated at every meaningful milestone using the defined schema.
-- Commit checkpoints are mandatory at the milestones defined in Steps 3, 4, and 5.
+- Commit checkpoints are mandatory at the milestones defined in Steps 4, 5, and 6.
 
 ---
 
@@ -324,4 +368,4 @@ If it exists, read it and resume from the last incomplete step.
 If it does not exist, start fresh with Step 1.
 
 ---
-LaneLayer Prompt 1.1.0 | CLI: @lanelayer/cli@0.4.16 | Session: {{SESSION_ID}}
+LaneLayer Prompt 1.2.0 | CLI: @lanelayer/cli@0.4.16 | Session: {{SESSION_ID}}

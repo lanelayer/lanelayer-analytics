@@ -29,4 +29,17 @@ pub fn allowed_origins() -> Vec<String> {
     ]
 }
 
-pub const APP_VERSION: &str = "1.0.0";
+pub fn resend_api_key() -> Option<String> {
+    let k = std::env::var("RESEND_API_KEY").ok()?;
+    if k.is_empty() {
+        return None;
+    }
+    Some(k)
+}
+
+pub fn from_email() -> String {
+    std::env::var("FROM_EMAIL")
+        .unwrap_or_else(|_| "LaneLayer <noreply@updates.lanelayer.com>".to_string())
+}
+
+pub const APP_VERSION: &str = "1.2.0";

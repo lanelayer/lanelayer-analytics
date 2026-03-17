@@ -78,3 +78,39 @@ pub struct HealthResponse {
     pub status: String,
     pub version: String,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct RegisterRequest {
+    pub email: String,
+    pub session_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RegisterResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VerifyRequest {
+    pub session_id: String,
+    pub code: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VerifyResponse {
+    pub success: bool,
+    pub verified: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AuthStatusQuery {
+    pub session: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AuthStatusResponse {
+    pub registered: bool,
+    pub verified: bool,
+    pub email: Option<String>,
+}

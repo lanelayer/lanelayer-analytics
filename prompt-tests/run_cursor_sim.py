@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -20,6 +21,18 @@ INTERVIEW_QUESTIONS = [
     "What programming language do you prefer?",
 ]
 
+STEP_HEADERS = [
+    "### Interview",
+    "### Requirements Summary",
+    "### Registration",
+    "### CLI",
+    "### Build",
+    "### Local Test Gate",
+    "### Deploy",
+    "### Resilience",
+    "### End State",
+]
+
 
 @dataclass
 class Turn:
@@ -28,7 +41,6 @@ class Turn:
 
 
 def _agent_path() -> Optional[str]:
-    """Return path to Cursor 'agent' CLI, checking PATH then common install locations."""
     path = shutil.which("agent")
     if path:
         return path
@@ -50,7 +62,6 @@ def load_lane_prompt(repo_root: Path, api_url: str) -> str:
 
 def load_scenario(repo_root: Path, scenario_path: Path) -> Dict[str, Any]:
     raw = json.loads(scenario_path.read_text(encoding="utf-8"))
-    # Expand fixture file paths into string contents for command_outputs
     terminal = raw["terminal"]
     cmd_outputs: Dict[str, str] = {}
     for cmd, rel in terminal["command_outputs"].items():
@@ -69,9 +80,6 @@ def run_agent_json(
     mode: Optional[str] = None,
     force: bool = False,
 ) -> Tuple[str, str]:
-    """
-    Run Cursor 'agent' once in json output mode and return (session_id, assistant_text).
-    """
     cmd = [
         agent_path,
         "--workspace",
@@ -123,11 +131,6 @@ def run_agent_stream_json(
     resume: Optional[str] = None,
     force: bool = True,
 ) -> Tuple[str, List[Dict[str, Any]]]:
-    """
-    Run Cursor 'agent' once and return (session_id, events).
-
-    We rely on Cursor CLI stream-json format so we can capture each assistant message.
-    """
     cmd = [
         agent_path,
         "--workspace",
@@ -170,7 +173,6 @@ def run_agent_stream_json(
             session_id = evt.get("session_id")
 
     if not session_id:
-        # Fallback: try result event
         for evt in reversed(events):
             if evt.get("type") == "result" and evt.get("session_id"):
                 session_id = evt["session_id"]
@@ -198,7 +200,6 @@ def extract_assistant_messages(events: List[Dict[str, Any]]) -> List[str]:
 
 
 def looks_like_multiple_questions(text: str) -> bool:
-    # Heuristic: multiple numbered questions or multiple distinct known questions.
     numbered = len(re.findall(r"(?m)^\s*\d+\.\s+", text))
     if numbered >= 2:
         return True
@@ -207,11 +208,8 @@ def looks_like_multiple_questions(text: str) -> bool:
 
 
 def build_terminal_agent_bootstrap(profile: Dict[str, str], command_outputs: Dict[str, str]) -> str:
-    """
-    Build the initial instruction for the TerminalAgent.
-    TerminalAgent plays the developer in the terminal and must respond with the single next terminal message only.
-    """
     outputs_preview = "\n".join([f"- {k}" for k in sorted(command_outputs.keys())])
+    email = profile.get("email", "dev@example.com")
     return (
         "You are TerminalAgent. You are not the lane agent.\n"
         "You are the developer sitting at a terminal, interacting with the lane agent.\n\n"
@@ -221,7 +219,8 @@ def build_terminal_agent_bootstrap(profile: Dict[str, str], command_outputs: Dic
         f"- Persistent data: {profile.get('persistent_data','unknown')}\n"
         f"- Business rules: {profile.get('business_rules','unknown')}\n"
         f"- Constraints: {profile.get('constraints','unknown')}\n"
-        f"- Language: {profile.get('language','unknown')}\n\n"
+        f"- Language: {profile.get('language','unknown')}\n"
+        f"- Email: {email}\n\n"
         "Rules:\n"
         "- Reply with ONLY your next terminal message (no analysis, no extra formatting).\n"
         "- If the lane agent asks you to run a command, do NOT actually run anything.\n"
@@ -236,7 +235,9 @@ def build_terminal_agent_bootstrap(profile: Dict[str, str], command_outputs: Dic
         "- Do NOT improvise fake external interactions to keep the conversation going.\n\n"
         "When asked for `lane --help`, respond with:\n"
         "Ran `lane --help`:\n"
-        "<paste output>\n"
+        "<paste output>\n\n"
+        f"- When asked for your email address, respond with: {email}\n"
+        "- When asked for a verification code, respond with: 123456\n"
     )
 
 
@@ -249,7 +250,6 @@ def terminal_agent_next_input(
     command_outputs: Dict[str, str],
 ) -> str:
     msg_l = lane_agent_message.lower()
-    # Hard override for known commands to keep determinism.
     if "lane --help" in msg_l or ("run" in msg_l and "--help" in msg_l and "lane" in msg_l):
         out = command_outputs.get("lane --help")
         if out:
@@ -262,7 +262,14 @@ def terminal_agent_next_input(
         ">>>\n\n"
         "What do you type next in the terminal? Reply with ONLY the next terminal message."
     )
-    _, reply = run_agent_json(agent_path=agent_path, workspace=workspace, prompt=prompt, resume=terminal_session, mode="ask", force=False)
+    _, reply = run_agent_json(
+        agent_path=agent_path,
+        workspace=workspace,
+        prompt=prompt,
+        resume=terminal_session,
+        mode="ask",
+        force=False,
+    )
     return reply
 
 
@@ -277,6 +284,7 @@ def check_journey_log(workspace: Path) -> Tuple[bool, List[str]]:
         "## Session:",
         "### Interview",
         "### Requirements Summary",
+        "### Registration",
         "### CLI",
         "### Build",
         "### Local Test Gate",
@@ -291,10 +299,10 @@ def check_journey_log(workspace: Path) -> Tuple[bool, List[str]]:
 
 
 def check_journey_log_progress(workspace: Path) -> Tuple[Dict[str, bool], List[str]]:
-    """Check whether each journey.log phase has real content (not just 'unknown' placeholders)."""
     phases: Dict[str, bool] = {
         "interview_filled": False,
         "requirements_filled": False,
+        "registration_filled": False,
         "cli_filled": False,
         "build_filled": False,
         "local_test_gate_filled": False,
@@ -311,7 +319,6 @@ def check_journey_log_progress(workspace: Path) -> Tuple[Dict[str, bool], List[s
     text_l = text.lower()
 
     def _section_text(header: str) -> str:
-        """Extract text between header and the next '###' header (or end of file)."""
         idx = text.find(header)
         if idx == -1:
             return ""
@@ -330,6 +337,12 @@ def check_journey_log_progress(workspace: Path) -> Tuple[Dict[str, bool], List[s
         phases["requirements_filled"] = True
     else:
         failures.append("Requirements Summary still unknown")
+
+    registration = _section_text("### Registration")
+    if "verified: yes" in registration.lower():
+        phases["registration_filled"] = True
+    else:
+        failures.append("Registration phase not completed (not verified)")
 
     cli = _section_text("### CLI")
     if "installed: yes" in text_l and "version: unknown" not in text_l:
@@ -364,6 +377,24 @@ def check_journey_log_progress(workspace: Path) -> Tuple[Dict[str, bool], List[s
     return phases, failures
 
 
+def detect_last_step(journey_text: str) -> str:
+    last = "none"
+    for header in STEP_HEADERS:
+        idx = journey_text.find(header)
+        if idx == -1:
+            continue
+        start = idx + len(header)
+        next_h = journey_text.find("\n### ", start)
+        section = (
+            journey_text[start:next_h].strip()
+            if next_h != -1
+            else journey_text[start:].strip()
+        )
+        if section and section.lower() != "unknown":
+            last = header.replace("### ", "")
+    return last
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--api-url", default="https://lanelayer-analytics.fly.dev")
@@ -393,6 +424,9 @@ def main() -> None:
         "local_test_gate_enforced": True,
     }
     notable_failures: List[str] = []
+    stop_reason = "max_turns"
+
+    start_time = time.time()
 
     with tempfile.TemporaryDirectory(prefix="lanelayer_prompt_sim_") as td:
         ws = Path(td)
@@ -400,37 +434,51 @@ def main() -> None:
         command_outputs = dict(scenario["terminal"]["command_outputs"])
         profile = dict(scenario["terminal"]["developer_profile"])
 
-        # Boot TerminalAgent session.
         terminal_boot = build_terminal_agent_bootstrap(profile, command_outputs)
-        terminal_session, _ = run_agent_json(agent_path=agent_path, workspace=ws, prompt=terminal_boot, resume=None, mode="ask", force=False)
+        terminal_session, _ = run_agent_json(
+            agent_path=agent_path,
+            workspace=ws,
+            prompt=terminal_boot,
+            resume=None,
+            mode="ask",
+            force=False,
+        )
 
-        # Turn 0: feed the lane prompt as the initial instruction (LaneAgent session).
-        session_id, events = run_agent_stream_json(agent_path=agent_path, workspace=ws, prompt=lane_prompt, resume=None)
+        session_id, events = run_agent_stream_json(
+            agent_path=agent_path, workspace=ws, prompt=lane_prompt, resume=None
+        )
         for m in extract_assistant_messages(events):
             turns.append(Turn("LaneAgent", m))
             if looks_like_multiple_questions(m):
                 invariants["interview_one_question_at_a_time"] = False
-                notable_failures.append("LaneAgent asked multiple interview questions in one message")
+                notable_failures.append(
+                    "LaneAgent asked multiple interview questions in one message"
+                )
             if "parent director" in m.lower() or "scan" in m.lower() and "workspace" in m.lower():
                 invariants["no_parent_directory_access"] = False
                 notable_failures.append("LaneAgent mentioned scanning/parent directory access")
 
         max_turns = int(scenario.get("stop_after", {}).get("max_turns", 18))
-        stop_early = False
-        # Loop: LaneAgent <-> TerminalAgent.
-        while len(turns) < max_turns and not stop_early:
-            last_assistant = next((t.message for t in reversed(turns) if t.role == "LaneAgent"), "")
+
+        while len(turns) < max_turns:
+            last_assistant = next(
+                (t.message for t in reversed(turns) if t.role == "LaneAgent"), ""
+            )
 
             last_l = last_assistant.lower()
-            if any(phrase in last_l for phrase in (
-                "standing by",
-                "just let me know",
-                "just drop a message",
-                "waiting for",
-                "once you get the",
-                "when the fix is live",
-            )):
-                notable_failures.append("LaneAgent reached a blocked/waiting state — ending simulation")
+            if any(
+                phrase in last_l
+                for phrase in (
+                    "standing by",
+                    "just let me know",
+                    "just drop a message",
+                    "waiting for",
+                    "once you get the",
+                    "when the fix is live",
+                )
+            ):
+                stop_reason = "blocked"
+                notable_failures.append("LaneAgent reached a blocked/waiting state")
                 break
 
             reply = terminal_agent_next_input(
@@ -441,24 +489,41 @@ def main() -> None:
                 command_outputs=command_outputs,
             )
             if not reply.strip():
+                stop_reason = "terminal_silent"
+                notable_failures.append("TerminalAgent returned empty response")
                 break
 
             if "ESCALATED" in reply.upper() and "waiting for external input" in reply.lower():
                 turns.append(Turn("Terminal", reply))
-                notable_failures.append("TerminalAgent escalated — simulation ended (no external service available)")
+                stop_reason = "escalated"
+                notable_failures.append(
+                    "TerminalAgent escalated — no external service available"
+                )
                 break
 
             turns.append(Turn("Terminal", reply))
 
-            _, ev = run_agent_stream_json(agent_path=agent_path, workspace=ws, prompt=reply, resume=session_id)
+            _, ev = run_agent_stream_json(
+                agent_path=agent_path, workspace=ws, prompt=reply, resume=session_id
+            )
             for m in extract_assistant_messages(ev):
                 turns.append(Turn("LaneAgent", m))
                 if looks_like_multiple_questions(m):
                     invariants["interview_one_question_at_a_time"] = False
-                    notable_failures.append("LaneAgent asked multiple interview questions in one message")
-                if "cd .." in m.lower() or "parent directory" in m.lower() or "scan the workspace" in m.lower():
+                    notable_failures.append(
+                        "LaneAgent asked multiple interview questions in one message"
+                    )
+                if (
+                    "cd .." in m.lower()
+                    or "parent directory" in m.lower()
+                    or "scan the workspace" in m.lower()
+                ):
                     invariants["no_parent_directory_access"] = False
-                    notable_failures.append("LaneAgent attempted parent-directory/workspace scanning behavior")
+                    notable_failures.append(
+                        "LaneAgent attempted parent-directory/workspace scanning behavior"
+                    )
+
+        duration = round(time.time() - start_time, 1)
 
         ok_jl, jl_failures = check_journey_log(ws)
         invariants["journey_log_used"] = ok_jl
@@ -467,14 +532,17 @@ def main() -> None:
         phases, phase_failures = check_journey_log_progress(ws)
         notable_failures.extend(phase_failures)
 
-        # Copy journey.log out of the temporary workspace so it can be inspected after the run.
+        # Read journey.log content and copy out
+        journey_log_text = ""
         jl_path = ws / "journey.log"
         if jl_path.exists():
+            journey_log_text = jl_path.read_text(encoding="utf-8", errors="replace")
             dest = repo_root / "prompt-tests" / "journey.log"
-            dest.write_text(jl_path.read_text(encoding="utf-8", errors="replace"), encoding="utf-8")
+            dest.write_text(journey_log_text, encoding="utf-8")
 
-        # --- Scoring ---
-        # Invariant penalties (max -6)
+        last_step = detect_last_step(journey_log_text) if journey_log_text else "none"
+
+        # Scoring
         overall_score = 10
         if not invariants["journey_log_used"]:
             overall_score -= 4
@@ -483,10 +551,10 @@ def main() -> None:
         if not invariants["no_parent_directory_access"]:
             overall_score -= 1
 
-        # Phase-progress penalties: each incomplete phase costs points.
         phase_weights = {
             "interview_filled": 1,
             "requirements_filled": 1,
+            "registration_filled": 1,
             "cli_filled": 1,
             "build_filled": 2,
             "local_test_gate_filled": 2,
@@ -495,7 +563,6 @@ def main() -> None:
         }
         phase_score = sum(w for phase, w in phase_weights.items() if phases.get(phase))
         max_phase_score = sum(phase_weights.values())
-        # Scale phase progress into 0-10 and blend: 40% invariants, 60% phase progress.
         phase_scaled = (phase_score / max_phase_score) * 10 if max_phase_score else 0
         overall_score = round(overall_score * 0.4 + phase_scaled * 0.6, 1)
         overall_score = max(0, min(10, overall_score))
@@ -504,12 +571,13 @@ def main() -> None:
             "engine": "cursor",
             "scenario": scenario.get("name", "unknown"),
             "overall_score": overall_score,
-            "overall_rationale": (
-                "Score = 40% invariant compliance + 60% journey phase progress. "
-                "Phases stuck at 'unknown' are penalized."
-            ),
+            "turn_count": len(turns),
+            "duration_seconds": duration,
+            "stop_reason": stop_reason,
+            "last_step_reached": last_step,
             "invariants": invariants,
             "phases": phases,
+            "journey_log": journey_log_text,
             "transcript": [{"role": t.role, "message": t.message} for t in turns],
             "notable_failures": list(dict.fromkeys(notable_failures)),
         }

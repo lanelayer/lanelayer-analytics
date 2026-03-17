@@ -57,6 +57,16 @@ CREATE TABLE IF NOT EXISTS cli_events (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS email_registrations (
+    email TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    verification_code TEXT NOT NULL,
+    verified_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL,
+    PRIMARY KEY (email, session_id),
+    FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_user_id ON events(user_id);
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
 CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);

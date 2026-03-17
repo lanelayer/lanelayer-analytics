@@ -1,5 +1,6 @@
 mod config;
 mod db;
+mod email;
 mod handlers;
 mod models;
 mod slack;
@@ -46,6 +47,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .route("/api/v1/prompt/versions", post(handlers::create_prompt_version))
         .route("/api/v1/sessions/correlate", post(handlers::correlate_session))
         .route("/api/v1/docs/:doc_id", get(handlers::track_doc_access))
+        .route("/api/v1/auth/register", post(handlers::register_email))
+        .route("/api/v1/auth/verify", post(handlers::verify_email))
+        .route("/api/v1/auth/status", get(handlers::auth_status))
         .layer(cors)
         .with_state(pool);
 

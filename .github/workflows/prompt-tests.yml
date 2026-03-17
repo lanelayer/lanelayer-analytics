@@ -1,0 +1,196 @@
+name: Prompt Tests
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+env:
+  API_URL: https://lanelayer-analytics.fly.dev
+  CODEX_SCORE_THRESHOLD: '6'
+  CURSOR_SCORE_THRESHOLD: '5'
+
+jobs:
+  codex-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      score: ${{ steps.run.outputs.score }}
+      passed: ${{ steps.run.outputs.passed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Codex CLI
+        run: npm install -g @openai/codex
+
+      - name: Run Codex simulation
+        id: run
+        env:
+          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+        run: |
+          set +e
+          RESULT=$(python3 prompt-tests/run_codex_sim.py --api-url "$API_URL" 2>&1)
+          EXIT_CODE=$?
+          set -e
+
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "score=0" >> "$GITHUB_OUTPUT"
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            echo "Codex simulation failed with exit code $EXIT_CODE"
+            echo "$RESULT"
+            exit 0
+          fi
+
+          SCORE=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('overall_score', 0))")
+          echo "score=${SCORE}" >> "$GITHUB_OUTPUT"
+
+          if python3 -c "exit(0 if float('${SCORE}') >= float('${{ env.CODEX_SCORE_THRESHOLD }}') else 1)"; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "Codex score: ${SCORE} (threshold: ${{ env.CODEX_SCORE_THRESHOLD }})"
+
+      - name: Upload Codex results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-results
+          path: prompt-tests/journey.log
+          if-no-files-found: ignore
+
+  cursor-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      score: ${{ steps.run.outputs.score }}
+      passed: ${{ steps.run.outputs.passed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Cursor CLI
+        run: |
+          curl -fsS https://cursor.com/install 2>/dev/null | bash || true
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run Cursor simulation
+        id: run
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          set +e
+          RESULT=$(python3 prompt-tests/run_cursor_sim.py --api-url "$API_URL" 2>&1)
+          EXIT_CODE=$?
+          set -e
+
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "score=0" >> "$GITHUB_OUTPUT"
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            echo "Cursor simulation failed with exit code $EXIT_CODE"
+            echo "$RESULT"
+            exit 0
+          fi
+
+          SCORE=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('overall_score', 0))")
+          echo "score=${SCORE}" >> "$GITHUB_OUTPUT"
+
+          if python3 -c "exit(0 if float('${SCORE}') >= float('${{ env.CURSOR_SCORE_THRESHOLD }}') else 1)"; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "Cursor score: ${SCORE} (threshold: ${{ env.CURSOR_SCORE_THRESHOLD }})"
+
+      - name: Upload Cursor results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cursor-results
+          path: prompt-tests/journey.log
+          if-no-files-found: ignore
+
+  report:
+    runs-on: ubuntu-latest
+    needs: [codex-test, cursor-test]
+    if: always()
+    steps:
+      - name: Send Slack notification
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_ALERTS_WEBHOOK_URL }}
+          CODEX_SCORE: ${{ needs.codex-test.outputs.score }}
+          CODEX_PASSED: ${{ needs.codex-test.outputs.passed }}
+          CURSOR_SCORE: ${{ needs.cursor-test.outputs.score }}
+          CURSOR_PASSED: ${{ needs.cursor-test.outputs.passed }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          DATE=$(date -u +"%Y-%m-%d")
+
+          if [ "${CODEX_PASSED}" = "true" ]; then
+            CODEX_EMOJI=":white_check_mark:"
+          else
+            CODEX_EMOJI=":x:"
+          fi
+
+          if [ "${CURSOR_PASSED}" = "true" ]; then
+            CURSOR_EMOJI=":white_check_mark:"
+          else
+            CURSOR_EMOJI=":x:"
+          fi
+
+          if [ "${CODEX_PASSED}" = "true" ] && [ "${CURSOR_PASSED}" = "true" ]; then
+            HEADER="Daily Prompt Tests PASSED"
+          else
+            HEADER="Daily Prompt Tests FAILED"
+          fi
+
+          cat > /tmp/slack-payload.json <<ENDOFPAYLOAD
+          {
+            "text": "${HEADER} (${DATE})",
+            "blocks": [
+              {
+                "type": "header",
+                "text": { "type": "plain_text", "text": "${HEADER} — ${DATE}" }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  { "type": "mrkdwn", "text": "${CODEX_EMOJI} *Codex:* score ${CODEX_SCORE:-N/A}" },
+                  { "type": "mrkdwn", "text": "${CURSOR_EMOJI} *Cursor:* score ${CURSOR_SCORE:-N/A}" }
+                ]
+              },
+              {
+                "type": "section",
+                "text": { "type": "mrkdwn", "text": "<${RUN_URL}|View workflow run>" }
+              }
+            ]
+          }
+          ENDOFPAYLOAD
+
+          if [ -n "${SLACK_WEBHOOK_URL}" ]; then
+            curl -sf -X POST -H "Content-Type: application/json" \
+              -d @/tmp/slack-payload.json "${SLACK_WEBHOOK_URL}"
+            echo ""
+            echo "Slack notification sent to #lanelayer-alerts"
+          else
+            echo "WARNING: SLACK_ALERTS_WEBHOOK_URL not set, skipping Slack notification"
+          fi
+

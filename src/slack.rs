@@ -82,3 +82,17 @@ pub async fn notify_cli_first_run(user_id: &str, command: &str, cli_version: Opt
     ]);
     send_slack_notification("New CLI User!", Some(blocks)).await;
 }
+
+pub async fn notify_email_registered(email: &str, session_id: &str) {
+    let blocks = json!([
+        { "type": "header", "text": { "type": "plain_text", "text": "New Email Registration!" } },
+        {
+            "type": "section",
+            "fields": [
+                { "type": "mrkdwn", "text": format!("*Email:*\n{}", email) },
+                { "type": "mrkdwn", "text": format!("*Session:*\n`{}`", session_id) },
+            ]
+        }
+    ]);
+    send_slack_notification("New Email Registration!", Some(blocks)).await;
+}

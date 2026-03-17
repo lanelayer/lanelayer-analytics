@@ -1,7 +1,8 @@
+use rand::Rng;
+
 const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
 
 pub fn generate_session_id(length: usize) -> String {
-    use rand::Rng;
     let mut rng = rand::thread_rng();
     (0..length)
         .map(|_| {
@@ -9,4 +10,10 @@ pub fn generate_session_id(length: usize) -> String {
             ALPHABET[idx] as char
         })
         .collect()
+}
+
+pub fn generate_verification_code() -> String {
+    let mut rng = rand::thread_rng();
+    let code: u32 = rng.gen_range(100000..1000000);
+    code.to_string()
 }
