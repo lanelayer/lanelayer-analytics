@@ -52,6 +52,7 @@ pub async fn register_email(
          VALUES (?, ?, ?, ?)
          ON CONFLICT(email, session_id) DO UPDATE SET
            verification_code = excluded.verification_code,
+           auth_token = NULL,
            verified_at = NULL,
            created_at = excluded.created_at",
     )
@@ -90,12 +91,14 @@ pub async fn verify_email(
     Json(req): Json<VerifyRequest>,
 ) -> Result<Json<VerifyResponse>, (StatusCode, String)> {
     let now = Utc::now().to_rfc3339();
+    let auth_token = utils::generate_auth_token(48);
 
     let result = sqlx::query(
-        "UPDATE email_registrations SET verified_at = ?
+        "UPDATE email_registrations SET verified_at = ?, auth_token = ?
          WHERE session_id = ? AND verification_code = ? AND verified_at IS NULL",
     )
     .bind(&now)
+    .bind(&auth_token)
     .bind(&req.session_id)
     .bind(&req.code)
     .execute(&pool)
@@ -105,6 +108,11 @@ pub async fn verify_email(
     Ok(Json(VerifyResponse {
         success: true,
         verified: result.rows_affected() > 0,
+        auth_token: if result.rows_affected() > 0 {
+            Some(auth_token)
+        } else {
+            None
+        },
     }))
 }
 
