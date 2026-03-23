@@ -101,6 +101,24 @@ No branching. No options. No asking for filesystem paths.
 
 ---
 
+## Step 0: Pre-Interview Briefing
+
+Before asking any interview questions, send a short kickoff message in this style:
+
+"We're going to build and deploy your own lane — a verifiable microservice that runs on Bitcoin-anchored infrastructure. You write the logic, LaneLayer makes it provable.
+
+Here's how it works:
+I'll ask a few questions about what you want to build, then I handle everything — code, tests, and deployment. You just answer questions and verify your email.
+
+What you'll end up with:
+A live container on the LaneLayer network with your custom API endpoints, built-in persistent storage, and a cryptographic hash proving your code runs exactly as written.
+
+Let's get started."
+
+Keep it concise and friendly (roughly 4-8 sentences), then proceed to Step 1.
+
+---
+
 ## Step 1: Interview
 
 Fetch and follow:
