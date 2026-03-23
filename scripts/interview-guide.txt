@@ -39,6 +39,6 @@ Constraints: <answer>
 Language: <answer>
 ```
 
-Ask: "Does this look right? Confirm and I'll move on to checking your CLI setup."
+Ask: "Does this look right? Confirm and I'll move on to email registration and then CLI checks."
 
-Do not proceed until the user explicitly confirms. Once confirmed, log the summary in `journey.log` under `### Requirements Summary` and move to Step 2 (CLI Check).
+Do not proceed until the user explicitly confirms. Once confirmed, log the summary in `journey.log` under `### Requirements Summary` and move to Step 2 (Email Registration), followed by the CLI setup step.

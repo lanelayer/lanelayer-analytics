@@ -11,3 +11,6 @@ dist/
 
 # Rust
 /target/
+
+# Runtime artifacts
+prompt-tests/journey.log

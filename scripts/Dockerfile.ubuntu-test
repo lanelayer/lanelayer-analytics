@@ -1,0 +1,31 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    python3 python3-pip curl git bc ca-certificates gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g @openai/codex || true
+
+RUN curl -fsS https://cursor.com/install 2>/dev/null | bash || true
+ENV PATH="/root/.local/bin:${PATH}"
+
+WORKDIR /app
+COPY . /app
+
+ENV PYTHONDONTWRITEBYTECODE=1
+
+CMD ["bash", "-c", " \
+    echo '=== Ubuntu Test Runner ===' && \
+    echo '--- Codex simulation ---' && \
+    python3 prompt-tests/run_codex_sim.py --api-url ${API_URL:-https://lanelayer-analytics.fly.dev} 2>&1 | tee /tmp/codex-result.json; \
+    echo '--- Cursor simulation ---' && \
+    python3 prompt-tests/run_cursor_sim.py --api-url ${API_URL:-https://lanelayer-analytics.fly.dev} 2>&1 | tee /tmp/cursor-result.json; \
+    echo '=== Done ===' \
+"]
+
