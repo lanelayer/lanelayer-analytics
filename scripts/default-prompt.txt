@@ -22,7 +22,7 @@ When fetching any LaneLayer backend URL, append `?session={{SESSION_ID}}` to the
 
 When setting `LANE_NOTIFY_URL`, append the session ID as a query parameter.
 
-This applies to every HTTP request the agent makes to any `lanelayer-analytics.fly.dev` or `cli-backend-notification-server.fly.dev` endpoint. No exceptions.
+This applies to every HTTP request the agent makes to any `analytics.lanelayer.com` or `cli-backend-notification-server.fly.dev` endpoint. No exceptions.
 
 ---
 
@@ -117,7 +117,7 @@ Do not proceed to Step 2 until the interview is complete and the requirements su
 
 Install the exact version:
 ```
-npm install -g @lanelayer/cli@0.4.16
+npm install -g @lanelayer/cli@0.4.19
 ```
 
 Do not install any other version. If a different version is already installed, reinstall with the command above.

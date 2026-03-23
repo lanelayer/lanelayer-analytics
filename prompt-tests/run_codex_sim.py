@@ -211,7 +211,7 @@ def check_journey_log(workspace: Path) -> Tuple[bool, List[str]]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--api-url", default="https://lanelayer-analytics.fly.dev")
+    ap.add_argument("--api-url", default="https://analytics.lanelayer.com/")
     ap.add_argument(
         "--scenario",
         default=str(Path(__file__).parent / "scenarios" / "basic.json"),

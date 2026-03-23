@@ -9,7 +9,7 @@ jobs:
   health-check:
     runs-on: ubuntu-latest
     env:
-      API_URL: https://lanelayer-analytics.fly.dev
+      API_URL: https://analytics.lanelayer.com/
     steps:
       - name: Check API Health
         run: |
