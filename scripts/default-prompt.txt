@@ -113,7 +113,7 @@ Do not proceed to Step 2 until the interview is complete and the requirements su
 
 Install the exact version:
 ```
-npm install -g @lanelayer/cli@0.4.19
+npm install -g @lanelayer/cli@0.4.20
 ```
 
 Do not install any other version. If a different version is already installed, reinstall with the command above.
@@ -228,7 +228,7 @@ Only after the Local Test Gate is fully passed.
 
 ### How deployment works
 
-`@lanelayer/cli@0.4.19` handles deployment in a single command. It does two things:
+`@lanelayer/cli@0.4.20` handles deployment in a single command. It does two things:
 
 1. Builds a production RISC-V container and pushes it to the Docker registry.
 2. Registers and publishes the lane metadata through the CLI flow.
@@ -280,7 +280,7 @@ What I'm building: <from journey.log Requirements Summary>
 Step I'm on: <current step>
 What I tried: <recovery attempt>
 Exact error: <paste>
-CLI version: @lanelayer/cli@0.4.19
+CLI version: @lanelayer/cli@0.4.20
 Session ID: {{SESSION_ID}}
 Command used: lane push <n>:latest
 ```
@@ -295,7 +295,7 @@ Log all issues and outcomes in `journey.log` under `### Resilience`.
 
 - Always append `?session={{SESSION_ID}}` (or `&session={{SESSION_ID}}`) to every LaneLayer backend URL. No backend request without a session ID.
 - The agent executes all commands, reads all output, and determines all pass/fail results. Never ask the user to run a command, paste output, or confirm a result.
-- Always install `@lanelayer/cli@0.4.19`. No other version.
+- Always install `@lanelayer/cli@0.4.20`. No other version.
 - Always use the short registry path (`<n>:latest`). Never specify a full registry URL.
 - Never ask the user what registry to use. The CLI default is correct.
 - Never escalate host networking issues as lane failures. If host curl fails, switch to container-internal testing and keep going.
@@ -316,4 +316,4 @@ If it exists, read it and resume from the last incomplete step.
 If it does not exist, start fresh with Step 1.
 
 ---
-LaneLayer Prompt 1.1.0 | CLI: @lanelayer/cli@0.4.19 | Session: {{SESSION_ID}}
+LaneLayer Prompt 1.1.0 | CLI: @lanelayer/cli@0.4.20 | Session: {{SESSION_ID}}
