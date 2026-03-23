@@ -123,30 +123,18 @@ Do not proceed to Step 2 until the interview is complete and the requirements su
 
 After the interview is confirmed, ask the developer for their email address.
 
-Register the email by sending a POST request:
+Register the email with the CLI:
 
 
-POST {{API_URL}}/api/v1/auth/register
-Content-Type: application/json
-
-{
-"email": "<developer_email>",
-"session_id": "{{SESSION_ID}}"
-}
+lane signup <developer_email> --session {{SESSION_ID}}
 
 
 Tell the developer to check their inbox for a 6-digit verification code.
 
-Once they provide the code, verify it:
+Once they provide the code, verify it with the CLI:
 
 
-POST {{API_URL}}/api/v1/auth/verify
-Content-Type: application/json
-
-{
-"session_id": "{{SESSION_ID}}",
-"code": "<6_digit_code>"
-}
+lane verify <6_digit_code> --session {{SESSION_ID}}
 
 
 If `"verified": false`, the code is wrong. Ask the developer to re-check and try again.
@@ -161,7 +149,7 @@ Log the registration in `journey.log` under `### Registration`.
 
 Install the exact version:
 
-npm install -g @lanelayer/cli@0.4.16
+npm install -g @lanelayer/cli@0.4.20
 
 
 Do not install any other version. If a different version is already installed, reinstall with the command above.
@@ -276,7 +264,7 @@ Only after the Local Test Gate is fully passed.
 
 ### How deployment works
 
-`@lanelayer/cli@0.4.16` handles deployment in a single command. It does two things:
+`@lanelayer/cli@0.4.20` handles deployment in a single command. It does two things:
 
 1. Builds a production RISC-V container and pushes it to the Docker registry.
 2. Notifies LaneLayer infra via the notification server.
@@ -331,7 +319,7 @@ What I'm building: <from journey.log Requirements Summary>
 Step I'm on: <current step>
 What I tried: <recovery attempt>
 Exact error: <paste>
-CLI version: @lanelayer/cli@0.4.16
+CLI version: @lanelayer/cli@0.4.20
 Session ID: {{SESSION_ID}}
 Command used: LANE_NOTIFY_URL=https://cli-backend-notification-server.fly.dev/notify?session={{SESSION_ID}} lane push <n>:latest
 
@@ -346,7 +334,7 @@ Log all issues and outcomes in `journey.log` under `### Resilience`.
 
 - Always append `?session={{SESSION_ID}}` (or `&session={{SESSION_ID}}`) to every LaneLayer backend URL. No backend request without a session ID.
 - The agent executes all commands, reads all output, and determines all pass/fail results. Never ask the user to run a command, paste output, or confirm a result.
-- Always install `@lanelayer/cli@0.4.16`. No other version.
+- Always install `@lanelayer/cli@0.4.20`. No other version.
 - Always set `LANE_NOTIFY_URL=https://cli-backend-notification-server.fly.dev/notify?session={{SESSION_ID}}` when running `lane push`.
 - Always use the short registry path (`<n>:latest`). Never specify a full registry URL.
 - Never ask the user what registry to use. The CLI default is correct.
@@ -368,4 +356,4 @@ If it exists, read it and resume from the last incomplete step.
 If it does not exist, start fresh with Step 1.
 
 ---
-LaneLayer Prompt 1.2.0 | CLI: @lanelayer/cli@0.4.16 | Session: {{SESSION_ID}}
+LaneLayer Prompt 1.2.0 | CLI: @lanelayer/cli@0.4.20 | Session: {{SESSION_ID}}
