@@ -36,6 +36,11 @@ Q: <question>
 A: <user answer>
 ... (repeat for all questions)
 
+### Registration
+Email: <email>
+Verified: yes/no
+Verified at: <timestamp>
+
 ### Requirements Summary
 <confirmed summary after interview>
 
@@ -109,7 +114,29 @@ Do not proceed to Step 2 until the interview is complete and the requirements su
 
 ---
 
-## Step 2: CLI Check
+## Step 2: Email Signup
+
+After the interview is confirmed, ask the developer for their email address.
+
+Register with:
+```
+lane signup <developer_email> --session {{SESSION_ID}} --api-url {{API_URL}}
+```
+
+Then ask for the 6-digit code from their inbox and verify with:
+```
+lane verify <6_digit_code> --session {{SESSION_ID}} --api-url {{API_URL}}
+```
+
+If verification is not successful, retry until it returns verified.
+
+Log results in `journey.log` under `### Registration`.
+
+Do not proceed to Step 3 until verification succeeds.
+
+---
+
+## Step 3: CLI Check
 
 Install the exact version:
 ```
@@ -131,7 +158,7 @@ Always rely on real CLI output for syntax. Never assume command flags or options
 
 ---
 
-## Step 3: Build
+## Step 4: Build
 
 Create the lane:
 ```
@@ -153,11 +180,11 @@ Log architectural decisions and commit checkpoints in `journey.log` under `### B
 
 ---
 
-## Step 4: Local Test Gate (Mandatory — Agent Executes Everything)
+## Step 5: Local Test Gate (Mandatory — Agent Executes Everything)
 
 Before any deployment, you (the agent) must execute and verify all of the following yourself. Do not ask the user to run commands, paste output, or confirm results. You run every command, read every output, and determine pass/fail.
 
-Do not proceed to Step 5 until every test passes.
+Do not proceed to Step 6 until every test passes.
 
 ### How to reach the lane
 
@@ -222,7 +249,7 @@ If any test fails, debug in place and re-test. Do not proceed until all pass.
 
 ---
 
-## Step 5: Deploy
+## Step 6: Deploy
 
 Only after the Local Test Gate is fully passed.
 
@@ -305,7 +332,7 @@ Log all issues and outcomes in `journey.log` under `### Resilience`.
 - CLI is the source of truth — always use real output, never assume syntax.
 - Use K/V API for all persistence.
 - Keep `journey.log` updated at every meaningful milestone using the defined schema.
-- Commit checkpoints are mandatory at the milestones defined in Steps 3, 4, and 5.
+- Commit checkpoints are mandatory at the milestones defined in Steps 4, 5, and 6.
 
 ---
 
@@ -316,4 +343,4 @@ If it exists, read it and resume from the last incomplete step.
 If it does not exist, start fresh with Step 1.
 
 ---
-LaneLayer Prompt 1.1.0 | CLI: @lanelayer/cli@0.4.20 | Session: {{SESSION_ID}}
+LaneLayer Prompt 1.2.0 | CLI: @lanelayer/cli@0.4.20 | Session: {{SESSION_ID}}
