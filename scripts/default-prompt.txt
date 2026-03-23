@@ -20,9 +20,7 @@ Every interaction with a LaneLayer backend must carry the session ID for telemet
 
 When fetching any LaneLayer backend URL, append `?session={{SESSION_ID}}` to the URL. When a URL already has query parameters, use `&session={{SESSION_ID}}` instead.
 
-When setting `LANE_NOTIFY_URL`, append the session ID as a query parameter.
-
-This applies to every HTTP request the agent makes to any `analytics.lanelayer.com` or `cli-backend-notification-server.fly.dev` endpoint. No exceptions.
+This applies to every HTTP request the agent makes to any `analytics.lanelayer.com` endpoint. No exceptions.
 
 ---
 
@@ -65,8 +63,6 @@ A: <user answer>
 - Command used: <exact command with env vars>
 - Full CLI output: <every line of output from lane push>
 - Container pushed to registry: yes/no
-- LaneLayer infra notified: yes/no
-- Notification response: <full JSON response from notification server>
 
 ### Resilience
 - Issues encountered: <list>
@@ -232,19 +228,17 @@ Only after the Local Test Gate is fully passed.
 
 ### How deployment works
 
-`@lanelayer/cli@0.4.16` handles deployment in a single command. It does two things:
+`@lanelayer/cli@0.4.19` handles deployment in a single command. It does two things:
 
 1. Builds a production RISC-V container and pushes it to the Docker registry.
-2. Notifies LaneLayer infra via the notification server.
-
-The notification is triggered by setting the `LANE_NOTIFY_URL` environment variable. Without it, the push happens but infra is not notified.
+2. Registers and publishes the lane metadata through the CLI flow.
 
 ### Deploy command
 
 Run this exact command (substitute `<n>` with the lane name from `journey.log`):
 
 ```
-LANE_NOTIFY_URL=https://cli-backend-notification-server.fly.dev/notify?session={{SESSION_ID}} lane push <n>:latest
+lane push <n>:latest
 ```
 
 Do not modify this command. Do not ask the user what registry to use. Do not use a full registry URL. The CLI handles the registry. The short path (`<n>:latest`) is correct.
@@ -253,15 +247,14 @@ Do not modify this command. Do not ask the user what registry to use. Do not use
 
 1. Read the full CLI output. Log every line in `journey.log` under `### Deploy → Full CLI output`.
 2. Confirm the push succeeded (image pushed to registry, no errors).
-3. Confirm the notification was sent and a response was received. Log the full notification response JSON in `journey.log` under `### Deploy → Notification response`.
-4. Log `Container pushed to registry: yes` and `LaneLayer infra notified: yes`.
+3. Log `Container pushed to registry: yes`.
 
 If the push fails, read the error, attempt one fix, and retry. If it fails again, go to Resilience & Recovery.
 
-After a successful push and notification, run:
+After a successful push, run:
 ```
 git add .
-git commit -m "Deployed — container pushed and infra notified"
+git commit -m "Deployed — container pushed"
 ```
 
 Log all results in `journey.log` under `### Deploy`.
@@ -277,7 +270,7 @@ If anything fails at any step, follow this triage order:
    - Host networking issue (curl 52, connection refused, status 000) → NOT a failure. Switch to container-internal testing. Do not escalate.
    - Build/code error → debug in place, reference the build docs
    - CLI error → check `lane --help`, reference `https://github.com/lanelayer/cli`
-   - Push error → verify `LANE_NOTIFY_URL=https://cli-backend-notification-server.fly.dev/notify?session={{SESSION_ID}}` is set, retry
+   - Push error → check `lane --help`, verify command syntax, retry
    - Infra/deployment error → check health endpoints, retry once
 3. **Recover**: Attempt one fix. Log what was tried in `journey.log`.
 4. **Escalate** if still blocked — help me post in Discord with this exact payload:
@@ -287,9 +280,9 @@ What I'm building: <from journey.log Requirements Summary>
 Step I'm on: <current step>
 What I tried: <recovery attempt>
 Exact error: <paste>
-CLI version: @lanelayer/cli@0.4.16
+CLI version: @lanelayer/cli@0.4.19
 Session ID: {{SESSION_ID}}
-Command used: LANE_NOTIFY_URL=https://cli-backend-notification-server.fly.dev/notify?session={{SESSION_ID}} lane push <n>:latest
+Command used: lane push <n>:latest
 ```
 
 Discord: `https://discord.gg/F9GwH7zzJm`
@@ -302,8 +295,7 @@ Log all issues and outcomes in `journey.log` under `### Resilience`.
 
 - Always append `?session={{SESSION_ID}}` (or `&session={{SESSION_ID}}`) to every LaneLayer backend URL. No backend request without a session ID.
 - The agent executes all commands, reads all output, and determines all pass/fail results. Never ask the user to run a command, paste output, or confirm a result.
-- Always install `@lanelayer/cli@0.4.16`. No other version.
-- Always set `LANE_NOTIFY_URL=https://cli-backend-notification-server.fly.dev/notify?session={{SESSION_ID}}` when running `lane push`.
+- Always install `@lanelayer/cli@0.4.19`. No other version.
 - Always use the short registry path (`<n>:latest`). Never specify a full registry URL.
 - Never ask the user what registry to use. The CLI default is correct.
 - Never escalate host networking issues as lane failures. If host curl fails, switch to container-internal testing and keep going.
@@ -324,4 +316,4 @@ If it exists, read it and resume from the last incomplete step.
 If it does not exist, start fresh with Step 1.
 
 ---
-LaneLayer Prompt 1.1.0 | CLI: @lanelayer/cli@0.4.16 | Session: {{SESSION_ID}}
+LaneLayer Prompt 1.1.0 | CLI: @lanelayer/cli@0.4.19 | Session: {{SESSION_ID}}
