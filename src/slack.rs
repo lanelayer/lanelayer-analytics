@@ -34,7 +34,12 @@ fn truncate_id(id: &str, max: usize) -> &str {
     }
 }
 
-pub async fn notify_prompt_copied(session_id: &str, version: &str, user_id: &str) {
+pub async fn notify_prompt_copied(
+    session_id: &str,
+    version: &str,
+    user_id: &str,
+    user_agent: &str,
+) {
     let blocks = json!([
         { "type": "header", "text": { "type": "plain_text", "text": "Prompt Copied" } },
         {
@@ -44,6 +49,13 @@ pub async fn notify_prompt_copied(session_id: &str, version: &str, user_id: &str
                 { "type": "mrkdwn", "text": format!("*Version:*\n{}", version) },
                 { "type": "mrkdwn", "text": format!("*User:*\n`{}...`", truncate_id(user_id, 16)) },
             ]
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": format!("*User-Agent:*\n```{}```", if user_agent.is_empty() { "unknown" } else { user_agent })
+            }
         }
     ]);
     send_slack_notification("Prompt Copied", Some(blocks)).await;

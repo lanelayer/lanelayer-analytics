@@ -1,4 +1,5 @@
 use axum::extract::State;
+use axum::http::HeaderMap;
 use axum::Json;
 use chrono::Utc;
 use sqlx::SqlitePool;
@@ -16,6 +17,7 @@ pub async fn health() -> Json<crate::models::HealthResponse> {
 
 pub async fn track_event(
     State(pool): State<SqlitePool>,
+    headers: HeaderMap,
     Json(event): Json<WebEvent>,
 ) -> Json<WebEventResponse> {
     let now = Utc::now().to_rfc3339();
@@ -83,8 +85,13 @@ pub async fn track_event(
             .to_string();
         let session_id = event.session_id.clone().unwrap_or_else(|| "none".to_string());
         let user_id = event.user_id.clone();
+        let user_agent = headers
+            .get("user-agent")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        let user_agent = user_agent.to_string();
         tokio::spawn(async move {
-            slack::notify_prompt_copied(&session_id, &version, &user_id).await;
+            slack::notify_prompt_copied(&session_id, &version, &user_id, &user_agent).await;
         });
     }
 
