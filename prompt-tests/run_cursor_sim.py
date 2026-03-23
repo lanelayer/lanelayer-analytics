@@ -366,7 +366,7 @@ def check_journey_log_progress(workspace: Path) -> Tuple[Dict[str, bool], List[s
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--api-url", default="https://lanelayer-analytics.fly.dev")
+    ap.add_argument("--api-url", default="https://analytics.lanelayer.com/")
     ap.add_argument(
         "--scenario",
         default=str(Path(__file__).parent / "scenarios" / "basic.json"),

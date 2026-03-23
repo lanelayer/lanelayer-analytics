@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Seeds the analytics server with the default prompt ({{API_URL}}, {{SESSION_ID}}, {{USER_ID}} in content).
 # Usage: ./scripts/seed-prompt.sh [API_URL]
-# Example: ./scripts/seed-prompt.sh https://lanelayer-analytics.fly.dev
+# Example: ./scripts/seed-prompt.sh https://analytics.lanelayer.com/
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Where the analytics API is deployed (used in prompt doc links and as POST target)
-API_URL="${1:-https://lanelayer-analytics.fly.dev}"
+API_URL="${1:-https://analytics.lanelayer.com/}"
 API_URL="${API_URL%/}"
 PROMPT_FILE="${SCRIPT_DIR}/default-prompt.txt"
 

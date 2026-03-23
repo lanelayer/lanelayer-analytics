@@ -8,7 +8,7 @@
 #
 # Usage:
 #   export CODEX_API_KEY=...
-#   ./scripts/simulate_lane_with_codex.sh --api-url https://lanelayer-analytics.fly.dev > lane-sim-codex.json
+#   ./scripts/simulate_lane_with_codex.sh --api-url https://analytics.lanelayer.com/ > lane-sim-codex.json
 
 set -euo pipefail
 

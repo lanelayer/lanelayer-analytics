@@ -8,7 +8,7 @@
 #
 # Usage:
 #   export CURSOR_API_KEY=...
-#   ./scripts/simulate_lane_with_cursor.sh --api-url https://lanelayer-analytics.fly.dev > lane-sim-cursor.json
+#   ./scripts/simulate_lane_with_cursor.sh --api-url https://analytics.lanelayer.com/ > lane-sim-cursor.json
 
 set -euo pipefail
 
