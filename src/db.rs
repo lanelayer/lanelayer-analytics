@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS email_registrations (
     email TEXT NOT NULL,
     session_id TEXT NOT NULL,
     verification_code TEXT NOT NULL,
+    auth_token TEXT,
     verified_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL,
     PRIMARY KEY (email, session_id),
@@ -88,6 +89,20 @@ pub async fn create_pool(path: &Path) -> Result<SqlitePool, sqlx::Error> {
 pub async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     for statement in SCHEMA.split(';').filter(|s| !s.trim().is_empty()) {
         sqlx::query(statement.trim()).execute(pool).await?;
+    }
+
+    // Backward-compatible migration for existing databases.
+    match sqlx::query("ALTER TABLE email_registrations ADD COLUMN auth_token TEXT")
+        .execute(pool)
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            let msg = e.to_string().to_lowercase();
+            if !msg.contains("duplicate column name") {
+                return Err(e);
+            }
+        }
     }
     Ok(())
 }

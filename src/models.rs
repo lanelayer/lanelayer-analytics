@@ -101,6 +101,7 @@ pub struct VerifyRequest {
 pub struct VerifyResponse {
     pub success: bool,
     pub verified: bool,
+    pub auth_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
