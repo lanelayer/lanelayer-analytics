@@ -322,7 +322,7 @@ def detect_last_step(journey_text: str) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--api-url", default="https://lanelayer-analytics.fly.dev")
+    ap.add_argument("--api-url", default="https://analytics.lanelayer.com/")
     ap.add_argument(
         "--scenario",
         default=str(Path(__file__).parent / "scenarios" / "basic.json"),
