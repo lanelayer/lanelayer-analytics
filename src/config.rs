@@ -38,8 +38,13 @@ pub fn resend_api_key() -> Option<String> {
 }
 
 pub fn from_email() -> String {
-    std::env::var("FROM_EMAIL")
-        .unwrap_or_else(|_| "LaneLayer <noreply@updates.lanelayer.com>".to_string())
+    let raw = std::env::var("FROM_EMAIL")
+        .unwrap_or_else(|_| "LaneLayer <noreply@updates.lanelayer.com>".to_string());
+    // Accept accidentally quoted env values, e.g. "\"Name <email@domain>\"".
+    raw.trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .to_string()
 }
 
 pub const APP_VERSION: &str = "1.2.0";
