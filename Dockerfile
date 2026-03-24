@@ -4,6 +4,7 @@ WORKDIR /app
 COPY Cargo.toml ./
 COPY src ./src
 COPY scripts ./scripts
+COPY samples/python ./samples/python
 
 RUN cargo build --release
 
