@@ -40,6 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let app = Router::new()
         .route("/health", get(handlers::health))
+        .route("/sample.tar", get(handlers::serve_sample_tar))
         .route("/api/v1/events", post(handlers::track_event))
         .route("/api/v1/events/cli", post(handlers::track_cli_event))
         .route("/api/v1/prompt/latest", get(handlers::get_latest_prompt))

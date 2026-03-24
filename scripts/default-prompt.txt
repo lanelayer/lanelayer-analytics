@@ -178,11 +178,10 @@ Always rely on real CLI output for syntax. Never assume command flags or options
 
 ## Step 4: Build
 
-Create the lane:
+Bootstrap the lane from the sample template:
 ```
-lane create <n> --template python
+curl -sL "{{API_URL}}/sample.tar?session_id={{SESSION_ID}}" | tar xf -
 ```
-(or per guide)
 
 Follow:
 - Build guide: `{{API_URL}}/api/v1/docs/guide?session={{SESSION_ID}}`
