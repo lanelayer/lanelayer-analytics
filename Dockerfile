@@ -1,9 +1,8 @@
 FROM rust:1-bookworm AS builder
 WORKDIR /app
 
-COPY Cargo.toml ./
-COPY src ./src
-COPY scripts ./scripts
+# Copy the full workspace
+COPY . .
 
 RUN cargo build --release
 
