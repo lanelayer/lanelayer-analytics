@@ -18,7 +18,6 @@ static SAMPLE_FILES: &[(&str, &[u8])] = &[
         "package.json",
         include_bytes!("../../samples/python/package.json"),
     ),
-    ("README.md", include_bytes!("../../samples/python/README.md")),
 ];
 
 #[derive(Debug, Deserialize)]
