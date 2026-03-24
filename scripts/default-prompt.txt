@@ -330,6 +330,7 @@ Log all issues and outcomes in `journey.log` under `### Resilience`.
 - Never ask for filesystem paths.
 - Never deploy before the Local Test Gate is fully passed.
 - CLI is the source of truth — always use real output, never assume syntax.
+- Use K/V API for all persistence.
 - Keep `journey.log` updated at every meaningful milestone using the defined schema.
 - Commit checkpoints are mandatory at the milestones defined in Steps 4, 5, and 6.
 
