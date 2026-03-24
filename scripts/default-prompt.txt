@@ -58,8 +58,6 @@ Verified at: <timestamp>
 - Test method: <host | container-internal | both>
 - Endpoints tested: yes/no
 - Endpoint test results: <list of endpoints with status codes and response summaries>
-- K/V persistence verified: yes/no
-- K/V test detail: <value written, value read back, match: yes/no>
 - Container built successfully: yes/no
 - Container build output: <summary of build output or error>
 - All passed: yes/no — DO NOT proceed to deploy until this is yes
@@ -185,9 +183,8 @@ curl -sL "{{API_URL}}/sample.tar?session={{SESSION_ID}}" | tar xf -
 
 Follow:
 - Build guide: `{{API_URL}}/api/v1/docs/guide?session={{SESSION_ID}}`
-- K/V API: `{{API_URL}}/api/v1/docs/kv-api?session={{SESSION_ID}}`
 
-After each meaningful milestone (lane created, K/V integrated, core logic complete), run:
+After each meaningful milestone (lane created, core logic complete), run:
 ```
 git add .
 git commit -m "<descriptive message>"
@@ -224,7 +221,6 @@ If `lane exec` has issues with complex arguments, write a test script first:
 cat > /tmp/test_endpoints.sh << 'EOF'
 #!/bin/bash
 curl -s -w "\nHTTP %{http_code}\n" http://localhost:8080/health
-curl -s -w "\nHTTP %{http_code}\n" http://localhost:8080/kv-test
 EOF
 chmod +x /tmp/test_endpoints.sh
 lane exec -- bash /tmp/test_endpoints.sh
@@ -239,22 +235,9 @@ Adapt the script to include ALL endpoints the lane exposes. Container-internal t
 3. If any endpoint fails from inside the container, debug and re-test.
 4. Log every endpoint, status code, and response summary in `journey.log`.
 
-### Test 2: Verify K/V persistence
-
-1. Write a test key-value pair (`__test_key` = `lanelayer_test_<timestamp>`).
-2. Read it back. Compare. They must match exactly.
-3. Delete the test key.
-4. Log written value, read value, and match result in `journey.log`.
-
-### Test 3: Confirm container builds successfully
-
-1. Run: `lane export prod ./dist-prod`
-2. Read the output. Confirm it completes without errors.
-3. Log the build summary in `journey.log`.
-
 ### Gate check
 
-After all three pass:
+After all tests pass:
 - Set `All passed: yes` in `journey.log`.
 - Run:
   ```
@@ -347,7 +330,6 @@ Log all issues and outcomes in `journey.log` under `### Resilience`.
 - Never ask for filesystem paths.
 - Never deploy before the Local Test Gate is fully passed.
 - CLI is the source of truth — always use real output, never assume syntax.
-- Use K/V API for all persistence.
 - Keep `journey.log` updated at every meaningful milestone using the defined schema.
 - Commit checkpoints are mandatory at the milestones defined in Steps 4, 5, and 6.
 

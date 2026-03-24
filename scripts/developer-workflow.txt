@@ -52,7 +52,6 @@ Returns: live derived lane RPC endpoint (LaneLayer-hosted), backed by Anvil.
 
 Where to look:
 - https://lanelayer.com/guide-reference.html#step-7-deploy-to-flyio
-- CLI `lane export prod` and deploy commands
 - https://github.com/lanelayer/cli
 
 After deployment returns an endpoint:
