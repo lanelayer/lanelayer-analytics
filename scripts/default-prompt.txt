@@ -180,7 +180,7 @@ Always rely on real CLI output for syntax. Never assume command flags or options
 
 Bootstrap the lane from the sample template:
 ```
-curl -sL "{{API_URL}}/sample.tar?session_id={{SESSION_ID}}" | tar xf -
+curl -sL "{{API_URL}}/sample.tar?session={{SESSION_ID}}" | tar xf -
 ```
 
 Follow:
