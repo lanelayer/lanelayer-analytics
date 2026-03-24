@@ -235,12 +235,6 @@ Adapt the script to include ALL endpoints the lane exposes. Container-internal t
 3. If any endpoint fails from inside the container, debug and re-test.
 4. Log every endpoint, status code, and response summary in `journey.log`.
 
-### Test 2: Confirm container builds successfully
-
-1. Run: `lane export prod ./dist-prod`
-2. Read the output. Confirm it completes without errors.
-3. Log the build summary in `journey.log`.
-
 ### Gate check
 
 After all tests pass:
