@@ -1,8 +1,10 @@
 FROM rust:1-bookworm AS builder
 WORKDIR /app
 
-# Copy the full workspace
-COPY . .
+COPY Cargo.toml ./
+COPY src ./src
+COPY scripts ./scripts
+COPY samples/python ./samples/python
 
 RUN cargo build --release
 
