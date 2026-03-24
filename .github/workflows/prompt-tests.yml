@@ -45,12 +45,15 @@ jobs:
           set -e
 
           if [ $EXIT_CODE -ne 0 ]; then
+            printf "%s\n" "$RESULT" > prompt-tests/codex-report.txt
             echo "score=0" >> "$GITHUB_OUTPUT"
             echo "passed=false" >> "$GITHUB_OUTPUT"
             echo "Codex simulation failed with exit code $EXIT_CODE"
             echo "$RESULT"
             exit 0
           fi
+
+          printf "%s\n" "$RESULT" > prompt-tests/codex-report.json
 
           SCORE=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('overall_score', 0))")
           echo "score=${SCORE}" >> "$GITHUB_OUTPUT"
@@ -68,7 +71,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: codex-results
-          path: prompt-tests/journey.log
+          path: |
+            prompt-tests/journey.log
+            prompt-tests/codex-report.json
+            prompt-tests/codex-report.txt
           if-no-files-found: ignore
 
   cursor-test:
@@ -102,12 +108,15 @@ jobs:
           set -e
 
           if [ $EXIT_CODE -ne 0 ]; then
+            printf "%s\n" "$RESULT" > prompt-tests/cursor-report.txt
             echo "score=0" >> "$GITHUB_OUTPUT"
             echo "passed=false" >> "$GITHUB_OUTPUT"
             echo "Cursor simulation failed with exit code $EXIT_CODE"
             echo "$RESULT"
             exit 0
           fi
+
+          printf "%s\n" "$RESULT" > prompt-tests/cursor-report.json
 
           SCORE=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('overall_score', 0))")
           echo "score=${SCORE}" >> "$GITHUB_OUTPUT"
@@ -125,7 +134,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cursor-results
-          path: prompt-tests/journey.log
+          path: |
+            prompt-tests/journey.log
+            prompt-tests/cursor-report.json
+            prompt-tests/cursor-report.txt
           if-no-files-found: ignore
 
   report:
@@ -133,6 +145,22 @@ jobs:
     needs: [codex-test, cursor-test]
     if: always()
     steps:
+      - name: Download Codex results artifact
+        if: always()
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: codex-results
+          path: /tmp/codex-results
+
+      - name: Download Cursor results artifact
+        if: always()
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: cursor-results
+          path: /tmp/cursor-results
+
       - name: Send Slack notification
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_ALERTS_WEBHOOK_URL }}
@@ -162,28 +190,150 @@ jobs:
             HEADER="Daily Prompt Tests FAILED"
           fi
 
-          cat > /tmp/slack-payload.json <<ENDOFPAYLOAD
-          {
-            "text": "${HEADER} (${DATE})",
-            "blocks": [
-              {
-                "type": "header",
-                "text": { "type": "plain_text", "text": "${HEADER} — ${DATE}" }
-              },
-              {
-                "type": "section",
-                "fields": [
-                  { "type": "mrkdwn", "text": "${CODEX_EMOJI} *Codex:* score ${CODEX_SCORE:-N/A}" },
-                  { "type": "mrkdwn", "text": "${CURSOR_EMOJI} *Cursor:* score ${CURSOR_SCORE:-N/A}" }
-                ]
-              },
-              {
-                "type": "section",
-                "text": { "type": "mrkdwn", "text": "<${RUN_URL}|View workflow run>" }
-              }
-            ]
+          CODEX_LOG_PATH="/tmp/codex-results/journey.log"
+          CURSOR_LOG_PATH="/tmp/cursor-results/journey.log"
+          export HEADER DATE RUN_URL CODEX_EMOJI CURSOR_EMOJI CODEX_LOG_PATH CURSOR_LOG_PATH
+
+          python3 <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          def excerpt(path: str, max_chars: int = 1400, max_lines: int = 40) -> str:
+              p = Path(path)
+              if not p.exists():
+                  return "No journey.log artifact found for this run."
+              text = p.read_text(encoding="utf-8", errors="replace").strip()
+              if not text:
+                  return "journey.log exists but is empty."
+              lines = text.splitlines()
+              tail = "\n".join(lines[-max_lines:])
+              if len(tail) > max_chars:
+                  tail = tail[-max_chars:]
+              return tail.strip() or "(no log excerpt available)"
+
+          def parse_report(base_dir: str, engine: str) -> dict:
+              p = Path(base_dir) / f"{engine}-report.json"
+              if p.exists():
+                  try:
+                      return json.loads(p.read_text(encoding="utf-8", errors="replace"))
+                  except Exception:
+                      pass
+              return {}
+
+          def quality_text(engine: str, report: dict) -> str:
+              if not report:
+                  return (
+                      f"*{engine.title()} quality*\n"
+                      "No structured JSON report found."
+                  )
+              score = report.get("overall_score", "N/A")
+              stop_reason = report.get("stop_reason", "unknown")
+              last_step = report.get("last_step_reached", "unknown")
+              turn_count = report.get("turn_count", "N/A")
+              failures = report.get("notable_failures", [])[:3]
+              failures_text = "\n".join(f"- {f}" for f in failures) if failures else "- none"
+              return (
+                  f"*{engine.title()} quality*\n"
+                  f"- score: {score}/10\n"
+                  f"- stop_reason: {stop_reason}\n"
+                  f"- last_step_reached: {last_step}\n"
+                  f"- turns: {turn_count}\n"
+                  f"- top failures:\n{failures_text}"
+              )
+
+          def transcript_excerpt(report: dict, max_lines: int = 12, max_chars: int = 1400) -> str:
+              transcript = report.get("transcript", []) if isinstance(report, dict) else []
+              if not transcript:
+                  return "No transcript available in report."
+              lines = []
+              for item in transcript[-max_lines:]:
+                  role = str(item.get("role", "Agent"))
+                  msg = str(item.get("message", "")).replace("`", "'").strip()
+                  if not msg:
+                      continue
+                  lines.append(f"{role}: {msg}")
+              text = "\n".join(lines).strip()
+              if len(text) > max_chars:
+                  text = text[-max_chars:]
+              return text or "Transcript exists but excerpt is empty."
+
+          header = os.getenv("HEADER", "Daily Prompt Tests")
+          date = os.getenv("DATE", "")
+          run_url = os.getenv("RUN_URL", "")
+          codex_emoji = os.getenv("CODEX_EMOJI", ":x:")
+          cursor_emoji = os.getenv("CURSOR_EMOJI", ":x:")
+
+          codex_report = parse_report("/tmp/codex-results", "codex")
+          cursor_report = parse_report("/tmp/cursor-results", "cursor")
+
+          codex_quality = quality_text("codex", codex_report)
+          cursor_quality = quality_text("cursor", cursor_report)
+          codex_transcript = transcript_excerpt(codex_report)
+          cursor_transcript = transcript_excerpt(cursor_report)
+
+          codex_text = excerpt("/tmp/codex-results/journey.log")
+          cursor_text = excerpt("/tmp/cursor-results/journey.log")
+
+          payload = {
+              "text": f"{header} ({date})",
+              "blocks": [
+                  {
+                      "type": "header",
+                      "text": {"type": "plain_text", "text": f"{header} - {date}"},
+                  },
+                  {
+                      "type": "section",
+                      "fields": [
+                          {"type": "mrkdwn", "text": f"{codex_emoji} *Codex*"},
+                          {"type": "mrkdwn", "text": f"{cursor_emoji} *Cursor*"},
+                      ],
+                  },
+                  {
+                      "type": "section",
+                      "text": {"type": "mrkdwn", "text": codex_quality},
+                  },
+                  {
+                      "type": "section",
+                      "text": {"type": "mrkdwn", "text": cursor_quality},
+                  },
+                  {
+                      "type": "section",
+                      "text": {
+                          "type": "mrkdwn",
+                          "text": f"*Codex transcript excerpt*\n```{codex_transcript}```",
+                      },
+                  },
+                  {
+                      "type": "section",
+                      "text": {
+                          "type": "mrkdwn",
+                          "text": f"*Cursor transcript excerpt*\n```{cursor_transcript}```",
+                      },
+                  },
+                  {
+                      "type": "section",
+                      "text": {
+                          "type": "mrkdwn",
+                          "text": f"*Codex journey.log excerpt*\n```{codex_text}```",
+                      },
+                  },
+                  {
+                      "type": "section",
+                      "text": {
+                          "type": "mrkdwn",
+                          "text": f"*Cursor journey.log excerpt*\n```{cursor_text}```",
+                      },
+                  },
+                  {
+                      "type": "section",
+                      "text": {"type": "mrkdwn", "text": f"<{run_url}|View full workflow run and artifacts>"},
+                  },
+              ],
           }
-          ENDOFPAYLOAD
+
+          Path("/tmp/slack-payload.json").write_text(json.dumps(payload), encoding="utf-8")
+          PY
 
           if [ -n "${SLACK_WEBHOOK_URL}" ]; then
             curl -sf -X POST -H "Content-Type: application/json" \
