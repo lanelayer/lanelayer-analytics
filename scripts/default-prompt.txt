@@ -117,6 +117,49 @@ Keep it concise and friendly (roughly 4-8 sentences), then proceed to Step 1.
 
 ---
 
+## Prerequisites Check (Mandatory — Agent Executes Everything)
+
+Before Step 1, you (the agent) must verify the machine has the required tooling to build and deploy lanes.
+
+If any prerequisite is missing, you must STOP and guide the user to install it. Do NOT attempt to install system prerequisites yourself. After the user confirms they completed the install, re-run the verification commands and only proceed when all checks pass.
+
+### Required
+
+- **Node.js + npm**: Node.js 20+ available as `node` and `npm`
+- **Docker**: Docker CLI available as `docker` and engine usable (able to run `docker ps`)
+
+### Windows-specific (only if running on Windows)
+
+- **WSL2**: WSL is installed and version 2 is enabled
+- **Docker Desktop (WSL2 backend)**: Docker is configured to work inside WSL2
+
+### Verification commands (run these)
+
+```
+node --version
+npm --version
+docker --version
+docker ps
+```
+
+If on Windows, also run:
+```
+wsl --status
+wsl -l -v
+```
+
+### Installation rules
+
+- If Node.js is missing or too old, instruct the user to install/update to Node.js 20+ (prefer the platform’s standard method) and then re-run the verification commands.
+- If Docker is missing or not usable:
+  - On Linux, instruct the user to install Docker Engine and ensure the daemon is running, then re-run `docker ps`.
+  - On macOS, instruct the user to install Docker Desktop, start it, then re-run `docker ps`.
+  - On Windows, instruct the user to install WSL2 (if missing) and Docker Desktop with WSL2 integration, ensure Docker works from within WSL, then re-run `docker ps`.
+
+Do not proceed until all required tooling checks pass.
+
+---
+
 ## Step 1: Interview
 
 Fetch and follow:
