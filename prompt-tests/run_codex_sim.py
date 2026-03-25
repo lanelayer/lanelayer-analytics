@@ -84,10 +84,13 @@ def codex_exec_jsonl(
     if thread_id is None:
         cmd = base + [prompt]
     else:
+        # Resume an existing thread — sandbox is inherited from the
+        # original thread, so we must NOT pass --sandbox again (the
+        # "resume" subcommand rejects it).
         cmd = ["codex", "exec", "resume", thread_id, "--json"]
         if full_auto:
             cmd.append("--full-auto")
-        cmd += ["--sandbox", sandbox, "--cd", str(workspace), prompt]
+        cmd += ["--cd", str(workspace), prompt]
 
     p = subprocess.run(
         cmd,

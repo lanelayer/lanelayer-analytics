@@ -40,16 +40,39 @@ jobs:
           CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
         run: |
           set +e
-          RESULT=$(python3 prompt-tests/run_codex_sim.py --api-url "$API_URL" 2>&1)
+          RESULT=$(python3 prompt-tests/run_codex_sim.py --api-url "$API_URL" 2>/tmp/codex-stderr.txt)
           EXIT_CODE=$?
           set -e
 
           if [ $EXIT_CODE -ne 0 ]; then
-            printf "%s\n" "$RESULT" > prompt-tests/codex-report.txt
+            STDERR_TEXT=$(cat /tmp/codex-stderr.txt 2>/dev/null || true)
+            ERROR_TEXT="${RESULT}${STDERR_TEXT:+\n---STDERR---\n${STDERR_TEXT}}"
+            printf "%s\n" "$ERROR_TEXT" > prompt-tests/codex-report.txt
+
+            # Also produce a minimal JSON report so the report job can always parse it
+            python3 -c "
+          import json, sys
+          error = sys.stdin.read().strip()
+          # Truncate to avoid JSON issues with very long tracebacks
+          if len(error) > 3000:
+              error = error[-3000:]
+          report = {
+              'engine': 'codex',
+              'overall_score': 0,
+              'turn_count': 0,
+              'stop_reason': 'crash',
+              'last_step_reached': 'none',
+              'crash_error': error,
+              'transcript': [],
+              'notable_failures': ['Script crashed with exit code $EXIT_CODE'],
+          }
+          print(json.dumps(report, indent=2))
+          " <<< "$ERROR_TEXT" > prompt-tests/codex-report.json
+
             echo "score=0" >> "$GITHUB_OUTPUT"
             echo "passed=false" >> "$GITHUB_OUTPUT"
             echo "Codex simulation failed with exit code $EXIT_CODE"
-            echo "$RESULT"
+            echo "$ERROR_TEXT"
             exit 0
           fi
 
@@ -94,8 +117,13 @@ jobs:
 
       - name: Install Cursor CLI
         run: |
-          curl -fsS https://cursor.com/install 2>/dev/null | bash || true
+          curl -fsSL https://cursor.com/install | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Cursor CLI
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          agent --version
 
       - name: Run Cursor simulation
         id: run
@@ -103,16 +131,38 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
         run: |
           set +e
-          RESULT=$(python3 prompt-tests/run_cursor_sim.py --api-url "$API_URL" 2>&1)
+          RESULT=$(python3 prompt-tests/run_cursor_sim.py --api-url "$API_URL" 2>/tmp/cursor-stderr.txt)
           EXIT_CODE=$?
           set -e
 
           if [ $EXIT_CODE -ne 0 ]; then
-            printf "%s\n" "$RESULT" > prompt-tests/cursor-report.txt
+            STDERR_TEXT=$(cat /tmp/cursor-stderr.txt 2>/dev/null || true)
+            ERROR_TEXT="${RESULT}${STDERR_TEXT:+\n---STDERR---\n${STDERR_TEXT}}"
+            printf "%s\n" "$ERROR_TEXT" > prompt-tests/cursor-report.txt
+
+            # Also produce a minimal JSON report so the report job can always parse it
+            python3 -c "
+          import json, sys
+          error = sys.stdin.read().strip()
+          if len(error) > 3000:
+              error = error[-3000:]
+          report = {
+              'engine': 'cursor',
+              'overall_score': 0,
+              'turn_count': 0,
+              'stop_reason': 'crash',
+              'last_step_reached': 'none',
+              'crash_error': error,
+              'transcript': [],
+              'notable_failures': ['Script crashed with exit code $EXIT_CODE'],
+          }
+          print(json.dumps(report, indent=2))
+          " <<< "$ERROR_TEXT" > prompt-tests/cursor-report.json
+
             echo "score=0" >> "$GITHUB_OUTPUT"
             echo "passed=false" >> "$GITHUB_OUTPUT"
             echo "Cursor simulation failed with exit code $EXIT_CODE"
-            echo "$RESULT"
+            echo "$ERROR_TEXT"
             exit 0
           fi
 
@@ -219,13 +269,26 @@ jobs:
                       return json.loads(p.read_text(encoding="utf-8", errors="replace"))
                   except Exception:
                       pass
+              # Fallback: read .txt error report if .json is missing or corrupt
+              txt = Path(base_dir) / f"{engine}-report.txt"
+              if txt.exists():
+                  error_text = txt.read_text(encoding="utf-8", errors="replace").strip()
+                  return {
+                      "overall_score": 0,
+                      "stop_reason": "crash",
+                      "last_step_reached": "none",
+                      "turn_count": 0,
+                      "crash_error": error_text[:3000],
+                      "transcript": [],
+                      "notable_failures": ["Script crashed — see error below"],
+                  }
               return {}
 
           def quality_text(engine: str, report: dict) -> str:
               if not report:
                   return (
                       f"*{engine.title()} quality*\n"
-                      "No structured JSON report found."
+                      "No report or artifacts found for this run."
                   )
               score = report.get("overall_score", "N/A")
               stop_reason = report.get("stop_reason", "unknown")
@@ -233,7 +296,7 @@ jobs:
               turn_count = report.get("turn_count", "N/A")
               failures = report.get("notable_failures", [])[:3]
               failures_text = "\n".join(f"- {f}" for f in failures) if failures else "- none"
-              return (
+              text = (
                   f"*{engine.title()} quality*\n"
                   f"- score: {score}/10\n"
                   f"- stop_reason: {stop_reason}\n"
@@ -241,6 +304,16 @@ jobs:
                   f"- turns: {turn_count}\n"
                   f"- top failures:\n{failures_text}"
               )
+              return text
+
+          def crash_excerpt(report: dict, max_chars: int = 1400) -> str:
+              error = report.get("crash_error", "") if isinstance(report, dict) else ""
+              if not error:
+                  return ""
+              # Take the tail so the most relevant traceback lines are visible
+              if len(error) > max_chars:
+                  error = error[-max_chars:]
+              return error.replace("`", "'").strip()
 
           def transcript_excerpt(report: dict, max_lines: int = 12, max_chars: int = 1400) -> str:
               transcript = report.get("transcript", []) if isinstance(report, dict) else []
@@ -269,67 +342,95 @@ jobs:
 
           codex_quality = quality_text("codex", codex_report)
           cursor_quality = quality_text("cursor", cursor_report)
+          codex_crash = crash_excerpt(codex_report)
+          cursor_crash = crash_excerpt(cursor_report)
           codex_transcript = transcript_excerpt(codex_report)
           cursor_transcript = transcript_excerpt(cursor_report)
 
           codex_text = excerpt("/tmp/codex-results/journey.log")
           cursor_text = excerpt("/tmp/cursor-results/journey.log")
 
+          blocks = [
+              {
+                  "type": "header",
+                  "text": {"type": "plain_text", "text": f"{header} - {date}"},
+              },
+              {
+                  "type": "section",
+                  "fields": [
+                      {"type": "mrkdwn", "text": f"{codex_emoji} *Codex*"},
+                      {"type": "mrkdwn", "text": f"{cursor_emoji} *Cursor*"},
+                  ],
+              },
+              {
+                  "type": "section",
+                  "text": {"type": "mrkdwn", "text": codex_quality},
+              },
+              {
+                  "type": "section",
+                  "text": {"type": "mrkdwn", "text": cursor_quality},
+              },
+          ]
+
+          # Show crash errors when scripts crashed, otherwise show transcripts
+          if codex_crash:
+              blocks.append({
+                  "type": "section",
+                  "text": {
+                      "type": "mrkdwn",
+                      "text": f":rotating_light: *Codex crash output*\n```{codex_crash}```",
+                  },
+              })
+          else:
+              blocks.append({
+                  "type": "section",
+                  "text": {
+                      "type": "mrkdwn",
+                      "text": f"*Codex transcript excerpt*\n```{codex_transcript}```",
+                  },
+              })
+
+          if cursor_crash:
+              blocks.append({
+                  "type": "section",
+                  "text": {
+                      "type": "mrkdwn",
+                      "text": f":rotating_light: *Cursor crash output*\n```{cursor_crash}```",
+                  },
+              })
+          else:
+              blocks.append({
+                  "type": "section",
+                  "text": {
+                      "type": "mrkdwn",
+                      "text": f"*Cursor transcript excerpt*\n```{cursor_transcript}```",
+                  },
+              })
+
+          blocks.extend([
+              {
+                  "type": "section",
+                  "text": {
+                      "type": "mrkdwn",
+                      "text": f"*Codex journey.log excerpt*\n```{codex_text}```",
+                  },
+              },
+              {
+                  "type": "section",
+                  "text": {
+                      "type": "mrkdwn",
+                      "text": f"*Cursor journey.log excerpt*\n```{cursor_text}```",
+                  },
+              },
+              {
+                  "type": "section",
+                  "text": {"type": "mrkdwn", "text": f"<{run_url}|View full workflow run and artifacts>"},
+              },
+          ])
+
           payload = {
               "text": f"{header} ({date})",
-              "blocks": [
-                  {
-                      "type": "header",
-                      "text": {"type": "plain_text", "text": f"{header} - {date}"},
-                  },
-                  {
-                      "type": "section",
-                      "fields": [
-                          {"type": "mrkdwn", "text": f"{codex_emoji} *Codex*"},
-                          {"type": "mrkdwn", "text": f"{cursor_emoji} *Cursor*"},
-                      ],
-                  },
-                  {
-                      "type": "section",
-                      "text": {"type": "mrkdwn", "text": codex_quality},
-                  },
-                  {
-                      "type": "section",
-                      "text": {"type": "mrkdwn", "text": cursor_quality},
-                  },
-                  {
-                      "type": "section",
-                      "text": {
-                          "type": "mrkdwn",
-                          "text": f"*Codex transcript excerpt*\n```{codex_transcript}```",
-                      },
-                  },
-                  {
-                      "type": "section",
-                      "text": {
-                          "type": "mrkdwn",
-                          "text": f"*Cursor transcript excerpt*\n```{cursor_transcript}```",
-                      },
-                  },
-                  {
-                      "type": "section",
-                      "text": {
-                          "type": "mrkdwn",
-                          "text": f"*Codex journey.log excerpt*\n```{codex_text}```",
-                      },
-                  },
-                  {
-                      "type": "section",
-                      "text": {
-                          "type": "mrkdwn",
-                          "text": f"*Cursor journey.log excerpt*\n```{cursor_text}```",
-                      },
-                  },
-                  {
-                      "type": "section",
-                      "text": {"type": "mrkdwn", "text": f"<{run_url}|View full workflow run and artifacts>"},
-                  },
-              ],
+              "blocks": blocks,
           }
 
           Path("/tmp/slack-payload.json").write_text(json.dumps(payload), encoding="utf-8")
