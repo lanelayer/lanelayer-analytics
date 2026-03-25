@@ -12,7 +12,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 
 RUN npm install -g @openai/codex || true
 
-RUN curl -fsSL https://cursor.com/install | bash
+RUN bash -lc 'set -euo pipefail; for i in 1 2 3; do curl -fsSL https://cursor.com/install | bash && break; echo "Cursor install failed (attempt $i/3), retrying..." >&2; sleep 2; done'
 ENV PATH="/root/.local/bin:${PATH}"
 
 WORKDIR /app

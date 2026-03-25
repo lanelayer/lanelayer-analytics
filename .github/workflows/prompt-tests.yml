@@ -115,22 +115,77 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Cursor CLI
-        run: |
-          curl -fsSL https://cursor.com/install | bash
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Verify Cursor CLI
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          agent --version
-
       - name: Run Cursor simulation
         id: run
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
         run: |
           set +e
+          # Install + verify Cursor CLI here so we can always emit a structured crash report
+          # (install currently downloads a pinned build which may 403 in CI).
+          curl -fsSL https://cursor.com/install 2>/tmp/cursor-install-stderr.txt | bash
+          INSTALL_EXIT_CODE=$?
+          if [ $INSTALL_EXIT_CODE -ne 0 ]; then
+            INSTALL_STDERR_TEXT=$(cat /tmp/cursor-install-stderr.txt 2>/dev/null || true)
+            ERROR_TEXT="Cursor CLI install failed (exit $INSTALL_EXIT_CODE)${INSTALL_STDERR_TEXT:+\n---STDERR---\n${INSTALL_STDERR_TEXT}}"
+            printf "%s\n" "$ERROR_TEXT" > prompt-tests/cursor-report.txt
+
+            python3 -c "
+          import json, sys
+          error = sys.stdin.read().strip()
+          if len(error) > 3000:
+              error = error[-3000:]
+          report = {
+              'engine': 'cursor',
+              'overall_score': 0,
+              'turn_count': 0,
+              'stop_reason': 'crash',
+              'last_step_reached': 'none',
+              'crash_error': error,
+              'transcript': [],
+              'notable_failures': ['Cursor CLI install failed'],
+          }
+          print(json.dumps(report, indent=2))
+          " <<< "$ERROR_TEXT" > prompt-tests/cursor-report.json
+
+            echo "score=0" >> "$GITHUB_OUTPUT"
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            echo "$ERROR_TEXT"
+            exit 0
+          fi
+
+          export PATH="$HOME/.local/bin:$PATH"
+          agent --version 2>/tmp/cursor-install-stderr.txt
+          VERIFY_EXIT_CODE=$?
+          if [ $VERIFY_EXIT_CODE -ne 0 ]; then
+            VERIFY_STDERR_TEXT=$(cat /tmp/cursor-install-stderr.txt 2>/dev/null || true)
+            ERROR_TEXT="Cursor CLI verify failed (exit $VERIFY_EXIT_CODE)${VERIFY_STDERR_TEXT:+\n---STDERR---\n${VERIFY_STDERR_TEXT}}"
+            printf "%s\n" "$ERROR_TEXT" > prompt-tests/cursor-report.txt
+
+            python3 -c "
+          import json, sys
+          error = sys.stdin.read().strip()
+          if len(error) > 3000:
+              error = error[-3000:]
+          report = {
+              'engine': 'cursor',
+              'overall_score': 0,
+              'turn_count': 0,
+              'stop_reason': 'crash',
+              'last_step_reached': 'none',
+              'crash_error': error,
+              'transcript': [],
+              'notable_failures': ['Cursor CLI verify failed'],
+          }
+          print(json.dumps(report, indent=2))
+          " <<< "$ERROR_TEXT" > prompt-tests/cursor-report.json
+
+            echo "score=0" >> "$GITHUB_OUTPUT"
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            echo "$ERROR_TEXT"
+            exit 0
+          fi
+
           RESULT=$(python3 prompt-tests/run_cursor_sim.py --api-url "$API_URL" 2>/tmp/cursor-stderr.txt)
           EXIT_CODE=$?
           set -e
