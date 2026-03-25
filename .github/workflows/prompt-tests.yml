@@ -46,7 +46,10 @@ jobs:
 
           if [ $EXIT_CODE -ne 0 ]; then
             STDERR_TEXT=$(cat /tmp/codex-stderr.txt 2>/dev/null || true)
-            ERROR_TEXT="${RESULT}${STDERR_TEXT:+\n---STDERR---\n${STDERR_TEXT}}"
+            ERROR_TEXT="${RESULT}"
+            if [ -n "${STDERR_TEXT}" ]; then
+              ERROR_TEXT="${ERROR_TEXT}"$'\n'"---STDERR---"$'\n'"${STDERR_TEXT}"
+            fi
             printf "%s\n" "$ERROR_TEXT" > prompt-tests/codex-report.txt
 
             # Also produce a minimal JSON report so the report job can always parse it
@@ -127,7 +130,10 @@ jobs:
           INSTALL_EXIT_CODE=$?
           if [ $INSTALL_EXIT_CODE -ne 0 ]; then
             INSTALL_STDERR_TEXT=$(cat /tmp/cursor-install-stderr.txt 2>/dev/null || true)
-            ERROR_TEXT="Cursor CLI install failed (exit $INSTALL_EXIT_CODE)${INSTALL_STDERR_TEXT:+\n---STDERR---\n${INSTALL_STDERR_TEXT}}"
+            ERROR_TEXT="Cursor CLI install failed (exit $INSTALL_EXIT_CODE)"
+            if [ -n "${INSTALL_STDERR_TEXT}" ]; then
+              ERROR_TEXT="${ERROR_TEXT}"$'\n'"---STDERR---"$'\n'"${INSTALL_STDERR_TEXT}"
+            fi
             printf "%s\n" "$ERROR_TEXT" > prompt-tests/cursor-report.txt
 
             python3 -c "
@@ -159,7 +165,10 @@ jobs:
           VERIFY_EXIT_CODE=$?
           if [ $VERIFY_EXIT_CODE -ne 0 ]; then
             VERIFY_STDERR_TEXT=$(cat /tmp/cursor-install-stderr.txt 2>/dev/null || true)
-            ERROR_TEXT="Cursor CLI verify failed (exit $VERIFY_EXIT_CODE)${VERIFY_STDERR_TEXT:+\n---STDERR---\n${VERIFY_STDERR_TEXT}}"
+            ERROR_TEXT="Cursor CLI verify failed (exit $VERIFY_EXIT_CODE)"
+            if [ -n "${VERIFY_STDERR_TEXT}" ]; then
+              ERROR_TEXT="${ERROR_TEXT}"$'\n'"---STDERR---"$'\n'"${VERIFY_STDERR_TEXT}"
+            fi
             printf "%s\n" "$ERROR_TEXT" > prompt-tests/cursor-report.txt
 
             python3 -c "
@@ -192,7 +201,10 @@ jobs:
 
           if [ $EXIT_CODE -ne 0 ]; then
             STDERR_TEXT=$(cat /tmp/cursor-stderr.txt 2>/dev/null || true)
-            ERROR_TEXT="${RESULT}${STDERR_TEXT:+\n---STDERR---\n${STDERR_TEXT}}"
+            ERROR_TEXT="${RESULT}"
+            if [ -n "${STDERR_TEXT}" ]; then
+              ERROR_TEXT="${ERROR_TEXT}"$'\n'"---STDERR---"$'\n'"${STDERR_TEXT}"
+            fi
             printf "%s\n" "$ERROR_TEXT" > prompt-tests/cursor-report.txt
 
             # Also produce a minimal JSON report so the report job can always parse it
