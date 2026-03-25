@@ -1,8 +1,10 @@
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::http::{header, HeaderMap};
 use axum::Json;
 use chrono::Utc;
 use sqlx::SqlitePool;
+use serde::Deserialize;
 
 use crate::email;
 use crate::models::{
@@ -140,5 +142,46 @@ pub async fn auth_status(
             email: None,
         })),
     }
+}
+
+pub async fn get_email_from_session_id(
+    State(pool): State<SqlitePool>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+    Query(query): Query<GetEmailFromSessionQuery>,
+) -> Result<(StatusCode, String), (StatusCode, String)> {
+    let bearer_token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(|s| s.trim().to_string());
+
+    let token = bearer_token.or(query.auth_token);
+    let token = match token {
+        Some(t) if !t.is_empty() => t,
+        _ => return Ok((StatusCode::UNAUTHORIZED, "unauthorized".to_string())),
+    };
+
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT email FROM email_registrations
+         WHERE session_id = ? AND auth_token = ?
+         ORDER BY (verified_at IS NOT NULL) DESC, created_at DESC
+         LIMIT 1",
+    )
+    .bind(&session_id)
+    .bind(&token)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    match row {
+        Some((email,)) => Ok((StatusCode::OK, email)),
+        None => Ok((StatusCode::UNAUTHORIZED, "unauthorized".to_string())),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetEmailFromSessionQuery {
+    pub auth_token: Option<String>,
 }
 
