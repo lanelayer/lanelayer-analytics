@@ -2,11 +2,14 @@
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -54,10 +57,52 @@ def _agent_path() -> Optional[str]:
     return None
 
 
-def load_lane_prompt(repo_root: Path, api_url: str) -> str:
+def _create_session(api_url: str) -> str:
+    """Call the analytics API to create a real session and return its ID."""
+    url = f"{api_url.rstrip('/')}/api/v1/prompt/latest"
+    req = urllib.request.Request(url)
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read())
+    session_id = data.get("session_id")
+    if not session_id:
+        raise RuntimeError("analytics API did not return a session_id")
+    return session_id
+
+
+def _poll_verification_code(
+    api_url: str, session_id: str, *, timeout: int = 30, interval: int = 3
+) -> Optional[str]:
+    """Poll the test endpoint for the real verification code."""
+    secret = os.environ.get("PROMPT_TEST_SECRET", "")
+    if not secret:
+        return None
+    url = (
+        f"{api_url.rstrip('/')}/api/v1/test/verification-code"
+        f"?session_id={session_id}"
+    )
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            req = urllib.request.Request(url, headers={"X-Test-Secret": secret})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if resp.status == 200:
+                    code = resp.read().decode().strip()
+                    if code and code != "no pending code":
+                        return code
+        except urllib.error.HTTPError:
+            pass
+        time.sleep(interval)
+    return None
+
+
+def load_lane_prompt(repo_root: Path, api_url: str) -> Tuple[str, str]:
+    """Load the prompt, create a real session, and return (prompt, session_id)."""
     prompt_path = repo_root / "scripts" / "default-prompt.txt"
     content = prompt_path.read_text(encoding="utf-8")
-    return content.replace("{{API_URL}}", api_url.rstrip("/"))
+    session_id = _create_session(api_url)
+    content = content.replace("{{API_URL}}", api_url.rstrip("/"))
+    content = content.replace("{{SESSION_ID}}", session_id)
+    return content, session_id
 
 
 def load_scenario(repo_root: Path, scenario_path: Path) -> Dict[str, Any]:
@@ -69,6 +114,28 @@ def load_scenario(repo_root: Path, scenario_path: Path) -> Dict[str, Any]:
         cmd_outputs[cmd] = p.read_text(encoding="utf-8")
     raw["terminal"] = {**terminal, "command_outputs": cmd_outputs}
     return raw
+
+
+_TRANSIENT_PATTERNS = [
+    "at capacity",
+    "rate limit",
+    "rate_limit",
+    "overloaded",
+    "503",
+    "502",
+    "500",
+    "server error",
+    "temporarily unavailable",
+    "try again",
+]
+
+_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 10  # seconds
+
+
+def _is_transient(stdout: str, stderr: str) -> bool:
+    combined = (stdout + "\n" + stderr).lower()
+    return any(pat in combined for pat in _TRANSIENT_PATTERNS)
 
 
 def run_agent_json(
@@ -97,17 +164,35 @@ def run_agent_json(
         cmd += ["--resume", resume]
     cmd.append(prompt)
 
-    p = subprocess.run(
-        cmd,
-        cwd=str(workspace),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    if p.returncode != 0:
-        raise RuntimeError(
-            f"agent failed (code={p.returncode})\nSTDERR:\n{p.stderr.strip()}\nSTDOUT:\n{p.stdout.strip()}"
+    last_error: Optional[RuntimeError] = None
+    for attempt in range(_MAX_RETRIES + 1):
+        p = subprocess.run(
+            cmd,
+            cwd=str(workspace),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
+        if p.returncode == 0:
+            break
+        if _is_transient(p.stdout, p.stderr):
+            last_error = RuntimeError(
+                f"agent failed (code={p.returncode})\nSTDERR:\n{p.stderr.strip()}\nSTDOUT:\n{p.stdout.strip()}"
+            )
+            if attempt < _MAX_RETRIES:
+                delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                print(
+                    f"[retry] transient failure on attempt {attempt + 1}, retrying in {delay}s …",
+                    flush=True,
+                )
+                time.sleep(delay)
+                continue
+        else:
+            raise RuntimeError(
+                f"agent failed (code={p.returncode})\nSTDERR:\n{p.stderr.strip()}\nSTDOUT:\n{p.stdout.strip()}"
+            )
+    else:
+        raise last_error  # type: ignore[misc]
 
     try:
         obj = json.loads(p.stdout.strip())
@@ -146,17 +231,35 @@ def run_agent_stream_json(
         cmd += ["--resume", resume]
     cmd.append(prompt)
 
-    p = subprocess.run(
-        cmd,
-        cwd=str(workspace),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    if p.returncode != 0:
-        raise RuntimeError(
-            f"agent failed (code={p.returncode})\nSTDERR:\n{p.stderr.strip()}\nSTDOUT:\n{p.stdout.strip()}"
+    last_error: Optional[RuntimeError] = None
+    for attempt in range(_MAX_RETRIES + 1):
+        p = subprocess.run(
+            cmd,
+            cwd=str(workspace),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
+        if p.returncode == 0:
+            break
+        if _is_transient(p.stdout, p.stderr):
+            last_error = RuntimeError(
+                f"agent failed (code={p.returncode})\nSTDERR:\n{p.stderr.strip()}\nSTDOUT:\n{p.stdout.strip()}"
+            )
+            if attempt < _MAX_RETRIES:
+                delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                print(
+                    f"[retry] transient failure on attempt {attempt + 1}, retrying in {delay}s …",
+                    flush=True,
+                )
+                time.sleep(delay)
+                continue
+        else:
+            raise RuntimeError(
+                f"agent failed (code={p.returncode})\nSTDERR:\n{p.stderr.strip()}\nSTDOUT:\n{p.stdout.strip()}"
+            )
+    else:
+        raise last_error  # type: ignore[misc]
 
     events: List[Dict[str, Any]] = []
     session_id: Optional[str] = None
@@ -248,12 +351,22 @@ def terminal_agent_next_input(
     terminal_session: str,
     lane_agent_message: str,
     command_outputs: Dict[str, str],
+    api_url: str = "",
+    session_id: str = "",
 ) -> str:
     msg_l = lane_agent_message.lower()
     if "lane --help" in msg_l or ("run" in msg_l and "--help" in msg_l and "lane" in msg_l):
         out = command_outputs.get("lane --help")
         if out:
             return f"Ran `lane --help`:\n\n{out}"
+
+    # Intercept verification-code requests — poll backend for the real code
+    if any(phrase in msg_l for phrase in ("verification code", "6-digit code", "digit code from")):
+        if api_url and session_id:
+            code = _poll_verification_code(api_url, session_id)
+            if code:
+                print("[verify] retrieved real verification code", flush=True)
+                return code
 
     prompt = (
         "LaneAgent just said:\n"
@@ -413,7 +526,8 @@ def main() -> None:
             "Then ensure ~/.local/bin is on your PATH, or run from a shell where 'agent' works."
         )
 
-    lane_prompt = load_lane_prompt(repo_root, args.api_url)
+    lane_prompt, created_session_id = load_lane_prompt(repo_root, args.api_url)
+    print(f"[session] created session {created_session_id}", flush=True)
     scenario = load_scenario(repo_root, Path(args.scenario))
 
     turns: List[Turn] = []
@@ -487,6 +601,8 @@ def main() -> None:
                 terminal_session=terminal_session,
                 lane_agent_message=last_assistant,
                 command_outputs=command_outputs,
+                api_url=args.api_url,
+                session_id=created_session_id,
             )
             if not reply.strip():
                 stop_reason = "terminal_silent"

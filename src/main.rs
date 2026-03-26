@@ -55,6 +55,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             "/api/v1/auth/email/:session_id",
             get(handlers::get_email_from_session_id),
         )
+        .route(
+            "/api/v1/test/verification-code",
+            get(handlers::test_verification_code),
+        )
         .layer(cors)
         .with_state(pool);
 
