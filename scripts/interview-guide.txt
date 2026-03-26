@@ -1,184 +1,44 @@
-# Interview Guide for "Build My Lane" (Agent-Native Version)
+# Interview Guide for "Build My Lane"
 
-Use this when the user wants to create a system through LaneLayer.
-
-Your goal is **not** to gather a full software specification.
-Your goal is to understand the user’s **coordination need** well enough to instantiate a working system quickly.
-
-Log each question and answer in `journey.log` under `### Interview`.
-
----
-
-## Core Principle
-
-> Infer as much as possible. Ask only what is necessary.
-> Move from **intent → system** with minimal friction.
+Use this when the user has asked you to interview them. Follow it step by step. Log each question and answer in `journey.log` under `### Interview`.
 
 ---
 
 ## Rules
 
-- Ask only one question per message.
+- Ask only one question per message. Do not list multiple questions. Do not preview upcoming questions.
 - Wait for the user's response before continuing.
-- After each response:
-  - Log the question and answer in `journey.log`
-  - Briefly acknowledge what they said
-  - Then ask the next question
-- Prefer **inference over interrogation**
-- Keep the interview short (**3–4 questions max** unless necessary)
-- Do not ask questions whose answers can be reasonably inferred
-- Do not proceed until the user confirms the proposed system
+- After each response: log the question and answer in `journey.log`, briefly acknowledge what they said, then ask the next question.
+- Do not move to any next step until all questions below are completed and the summary is confirmed by the user.
 
 ---
 
-## Interview Flow
+## Questions (One at a Time)
 
-### 1. The Wish
-
-Ask:
-
-**What do you want this system to help people do?**
-
-Examples (only if needed):
-- split expenses
-- hold money in escrow
-- track shared balances
-- manage a group treasury
-- run a simple marketplace
-
-**Goal:** Understand the outcome in plain language
-
----
-
-### 2. Participants
-
-Ask:
-
-**Who will use this system, and how many parties are involved?**
-
-Examples:
-- just me
-- me and one other person
-- a small group
-- buyers and sellers
-- a community
-
-**Goal:** Identify the coordination shape
-
----
-
-### 3. Shared State
-
-Ask:
-
-**What needs to be shared or tracked inside the system?**
-
-Examples:
-- balances
-- payments
-- approvals
-- contributions
-- listings
-- votes
-- milestones
-
-**Goal:** Understand what the system is coordinating
-
----
-
-### 4. Key Constraint
-
-Ask:
-
-**What is the one thing this system must get right?**
-
-Examples:
-- only release money after approval
-- everyone should see balances
-- payouts happen weekly
-- two people must approve spending
-- buyers cannot cheat sellers
-
-**Goal:** Capture the most important rule or risk
-
----
-
-## Optional Question — Language
-
-Only ask if needed:
-
-**Do you want a specific programming language, or should I use the default?**
-
-Default to Python if no preference is given.
+1. What type of application do you want to build? (e.g. prediction market, escrow service, voting system, NFT marketplace)
+2. What are the core features and functionality you need?
+3. What data needs to be stored persistently?
+4. What are the key business rules or logic?
+5. Are there any specific requirements or constraints?
+6. What programming language do you prefer? (Python is the default; other languages are supported.)
 
 ---
 
 ## After the Final Question
 
-Compile and present:
+Compile a structured requirements summary from all answers and present it to the user:
 
-### Proposed System
+```
+### Requirements Summary
 
-Goal: <user intent>
-Users: <participants>
-Shared state: <what is tracked>
-Key rule: <critical constraint>
+App type: <answer>
+Core features: <answer>
+Persistent data: <answer>
+Business rules: <answer>
+Constraints: <answer>
+Language: <answer>
+```
 
-I’ll set up a working version of this system now so you can start using it immediately.
+Ask: "Does this look right? Confirm and I'll move on to email registration and then CLI checks."
 
-Ask:
-
-**Does this look right?**
-
-Do not proceed until the user explicitly confirms.
-
----
-
-## After Confirmation
-
-- Log the summary in `journey.log` under `### Proposed System`
-- Move to:
-  - Email Registration
-  - CLI / Deployment (handled by agent)
-- Proceed to instantiate the system
-
----
-
-## Adaptive Behavior (Important)
-
-If the user's first answer clearly maps to a known pattern:
-
-- escrow
-- shared ledger
-- treasury
-- marketplace
-- voting
-
-Then:
-
-- Skip unnecessary questions
-- Ask only what is missing
-- Move faster to system creation
-
----
-
-## What to Avoid
-
-Do NOT ask early:
-
-- "What data needs to be stored persistently?"
-- "What are the business rules?" (too abstract)
-- "What architecture do you want?"
-- Anything requiring technical knowledge
-
-These should be inferred or handled later.
-
----
-
-## Mental Model
-
-You are not collecting requirements.
-You are selecting and instantiating a **coordination mechanism**.
-
-The user provides intent.
-You provide the system.
+Do not proceed until the user explicitly confirms. Once confirmed, log the summary in `journey.log` under `### Requirements Summary` and move to Step 2 (Email Registration), followed by the CLI setup step.
