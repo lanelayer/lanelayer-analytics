@@ -38,6 +38,7 @@ jobs:
         id: run
         env:
           CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+          PROMPT_TEST_SECRET: ${{ secrets.PROMPT_TEST_SECRET }}
         run: |
           set +e
           RESULT=$(python3 prompt-tests/run_codex_sim.py --api-url "$API_URL" 2>/tmp/codex-stderr.txt)
@@ -122,6 +123,7 @@ jobs:
         id: run
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          PROMPT_TEST_SECRET: ${{ secrets.PROMPT_TEST_SECRET }}
         run: |
           set +e
           # Install + verify Cursor CLI here so we can always emit a structured crash report
