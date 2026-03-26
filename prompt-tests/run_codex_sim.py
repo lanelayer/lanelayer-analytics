@@ -2,8 +2,10 @@
 
 import argparse
 import json
+import os
 import re
 import shutil
+import shlex
 import subprocess
 import tempfile
 import time
@@ -13,12 +15,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 INTERVIEW_QUESTIONS = [
-    "What type of application do you want to build?",
-    "What are the core features and functionality you need?",
-    "What data needs to be stored persistently?",
-    "What are the key business rules or logic?",
-    "Are there any specific requirements or constraints?",
-    "What programming language do you prefer?",
+    "What do you want this system to help people do?",
+    "Who will use this system, and how many parties are involved?",
+    "What needs to be shared or tracked inside the system?",
+    "What is the one thing this system must get right?",
+    "Do you want a specific programming language, or should I use the default?",
 ]
 
 STEP_HEADERS = [
@@ -43,11 +44,39 @@ class Turn:
 def _which(cmd: str) -> Optional[str]:
     return shutil.which(cmd)
 
+def load_dotenv_into(env: Dict[str, str], dotenv_path: Path) -> Dict[str, str]:
+    """
+    Minimal .env loader (KEY=VALUE lines). No interpolation.
+    Values in the .env override existing env.
+    """
+    if not dotenv_path.exists():
+        return env
+    for raw in dotenv_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k = k.strip()
+        v = v.strip().strip('"').strip("'")
+        if k:
+            env[k] = v
+    return env
 
-def load_lane_prompt(repo_root: Path, api_url: str) -> str:
+
+def make_session_id() -> str:
+    # Stable enough for logs/telemetry, unique enough for CI.
+    return str(int(time.time() * 1000))
+
+
+def load_lane_prompt(repo_root: Path, api_url: str, session_id: str) -> str:
     prompt_path = repo_root / "scripts" / "default-prompt.txt"
     content = prompt_path.read_text(encoding="utf-8")
-    return content.replace("{{API_URL}}", api_url.rstrip("/"))
+    return (
+        content.replace("{{API_URL}}", api_url.rstrip("/"))
+        .replace("{{SESSION_ID}}", session_id)
+    )
 
 
 def load_scenario(repo_root: Path, scenario_path: Path) -> Dict[str, Any]:
@@ -68,16 +97,36 @@ def codex_exec_jsonl(
     thread_id: Optional[str] = None,
     sandbox: str = "workspace-write",
     full_auto: bool = True,
+    env: Optional[Dict[str, str]] = None,
 ) -> Tuple[str, List[Dict[str, Any]]]:
-    base = [
-        "codex",
-        "exec",
-        "--json",
-        "--sandbox",
-        sandbox,
-    ]
-    if full_auto:
-        base.insert(3, "--full-auto")
+    # Prefer running via npx to avoid PATH shadowing (e.g. a broken /usr/bin/codex).
+    # Allow override via CODEX_CMD, e.g. "codex" or "npx --yes @openai/codex".
+    codex_cmd = os.environ.get("CODEX_CMD", "").strip()
+    if codex_cmd:
+        codex_prefix = shlex.split(codex_cmd)
+    elif _which("npx") is not None:
+        codex_prefix = ["npx", "--yes", "@openai/codex"]
+    else:
+        codex_prefix = ["codex"]
+
+    # `@openai/codex` only accepts specific sandbox modes; use "none" here as a
+    # convenience sentinel to bypass sandboxing via the documented yolo flag.
+    if sandbox == "none":
+        base = codex_prefix + [
+            "exec",
+            "--json",
+            "--dangerously-bypass-approvals-and-sandbox",
+        ]
+        # Don't pass --full-auto here; it implies --sandbox workspace-write.
+    else:
+        base = codex_prefix + [
+            "exec",
+            "--json",
+            "--sandbox",
+            sandbox,
+        ]
+        if full_auto:
+            base.insert(len(codex_prefix) + 2, "--full-auto")
 
     if thread_id is None:
         cmd = base + [prompt]
@@ -86,22 +135,67 @@ def codex_exec_jsonl(
         # original thread, so we must NOT pass --sandbox again (the
         # "resume" subcommand rejects it). We also avoid passing --cd
         # (resume rejects it); we rely on subprocess cwd=workspace.
-        cmd = ["codex", "exec", "resume", thread_id, "--json"]
-        if full_auto:
+        cmd = codex_prefix + ["exec", "resume", thread_id, "--json"]
+        if sandbox == "none":
+            cmd.append("--dangerously-bypass-approvals-and-sandbox")
+        elif full_auto:
             cmd.append("--full-auto")
         cmd += [prompt]
 
-    p = subprocess.run(
-        cmd,
-        cwd=str(workspace),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    if p.returncode != 0:
-        raise RuntimeError(
-            f"codex exec failed (code={p.returncode})\nSTDERR:\n{p.stderr.strip()}\nSTDOUT:\n{p.stdout.strip()}"
+    def _run(run_cmd: List[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            run_cmd,
+            cwd=str(workspace),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
         )
+
+    p = _run(cmd)
+    if p.returncode != 0:
+        err = (p.stderr or "").strip()
+        out = (p.stdout or "").strip()
+        # Some environments have bubblewrap without --argv0 support. In that case
+        # we fall back to running without sandboxing so the sim can proceed.
+        if (
+            "bwrap: Unknown option --argv0" in err
+            and "--sandbox" in cmd
+            and sandbox != "none"
+        ):
+            fallback_sandbox = os.environ.get("CODEX_FALLBACK_SANDBOX", "none")
+            cmd2 = [x for x in cmd]
+            if fallback_sandbox == "none":
+                # Replace `--sandbox X` with the yolo flag.
+                try:
+                    i = cmd2.index("--sandbox")
+                    del cmd2[i : i + 2]
+                except Exception:
+                    pass
+                cmd2.insert(
+                    cmd2.index("exec") + 1,
+                    "--dangerously-bypass-approvals-and-sandbox",
+                )
+            else:
+                try:
+                    i = cmd2.index("--sandbox")
+                    cmd2[i + 1] = fallback_sandbox
+                except Exception:
+                    cmd2 = cmd2 + ["--sandbox", fallback_sandbox]
+            p2 = _run(cmd2)
+            if p2.returncode == 0:
+                p = p2
+            else:
+                raise RuntimeError(
+                    "codex exec failed; sandbox fallback also failed\n"
+                    f"FIRST STDERR:\n{err}\nFIRST STDOUT:\n{out}\n\n"
+                    f"FALLBACK STDERR:\n{(p2.stderr or '').strip()}\n"
+                    f"FALLBACK STDOUT:\n{(p2.stdout or '').strip()}"
+                )
+        else:
+            raise RuntimeError(
+                f"codex exec failed (code={p.returncode})\nSTDERR:\n{err}\nSTDOUT:\n{out}"
+            )
 
     events: List[Dict[str, Any]] = []
     tid: Optional[str] = None
@@ -142,6 +236,34 @@ def looks_like_multiple_questions(text: str) -> bool:
     return matched >= 2
 
 
+def too_many_questions_in_one_message(text: str) -> bool:
+    # Stricter than looks_like_multiple_questions: counts actual question marks.
+    return text.count("?") >= 2
+
+
+def is_session_complete_message(text: str) -> bool:
+    t = text.strip().lower()
+    if t in {"exit", "logout", "^d", "noop", "whoami", "pwd"}:
+        return True
+    return any(
+        p in t
+        for p in (
+            "the conversation is done",
+            "conversation is done",
+            "session complete",
+            "session closed",
+            "end session",
+            "end of session",
+            "no further messages",
+            "no further input",
+            "(no response",
+            "(done.)",
+            "(done)",
+            "(end of session",
+        )
+    )
+
+
 def build_terminal_agent_bootstrap(profile: Dict[str, str], command_outputs: Dict[str, str]) -> str:
     outputs_preview = "\n".join([f"- {k}" for k in sorted(command_outputs.keys())])
     email = profile.get("email", "dev@example.com")
@@ -173,6 +295,8 @@ def terminal_agent_next_input(
     terminal_thread: str,
     lane_agent_message: str,
     command_outputs: Dict[str, str],
+    sandbox: str = "read-only",
+    env: Optional[Dict[str, str]] = None,
 ) -> str:
     msg_l = lane_agent_message.lower()
     if "lane --help" in msg_l or ("run" in msg_l and "--help" in msg_l and "lane" in msg_l):
@@ -191,8 +315,9 @@ def terminal_agent_next_input(
         workspace=workspace,
         prompt=prompt,
         thread_id=terminal_thread,
-        sandbox="read-only",
+        sandbox=sandbox,
         full_auto=True,
+        env=env,
     )
     msgs = extract_codex_agent_messages(ev)
     return msgs[-1] if msgs else ""
@@ -205,6 +330,8 @@ def check_journey_log(workspace: Path) -> Tuple[bool, List[str]]:
         return False, ["journey.log not created"]
 
     text = jl.read_text(encoding="utf-8", errors="replace")
+    if "{{SESSION_ID}}" in text:
+        failures.append("journey.log contains unsubstituted {{SESSION_ID}} placeholder")
     required_headers = [
         "## Session:",
         "### Interview",
@@ -329,16 +456,24 @@ def main() -> None:
         "--scenario",
         default=str(Path(__file__).parent / "scenarios" / "basic.json"),
     )
+    ap.add_argument(
+        "--codex-sandbox",
+        default=os.environ.get("CODEX_SANDBOX", "workspace-write"),
+        help="Sandbox mode passed to Codex (read-only, workspace-write, danger-full-access, or 'none' to bypass).",
+    )
     args = ap.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
 
-    if _which("codex") is None:
-        raise SystemExit("error: Codex CLI 'codex' is not installed or not on PATH")
+    if _which("npx") is None and _which("codex") is None:
+        raise SystemExit(
+            "error: Codex CLI not available. Install @openai/codex or ensure npx is available."
+        )
     if _which("git") is None:
         raise SystemExit("error: git is required for codex exec runs")
 
-    lane_prompt = load_lane_prompt(repo_root, args.api_url)
+    session_id = os.environ.get("LANELAYER_SESSION_ID", "").strip() or make_session_id()
+    lane_prompt = load_lane_prompt(repo_root, args.api_url, session_id)
     scenario = load_scenario(repo_root, Path(args.scenario))
 
     turns: List[Turn] = []
@@ -356,6 +491,53 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="lanelayer_prompt_sim_codex_") as td:
         ws = Path(td)
 
+        # Provide a fake `lane` binary so the prompt flow can run in CI
+        # without relying on external services for signup/verify/push.
+        bin_dir = ws / "_bin"
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        lane_path = bin_dir / "lane"
+        lane_path.write_text(
+            """#!/usr/bin/env bash
+set -euo pipefail
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  --help|-h|help|"")
+    echo "@lanelayer/cli@0.4.20 (fake)"
+    echo "Usage: lane <command> [args]"
+    ;;
+  signup)
+    echo "Signup initiated (fake). Verification code sent."
+    ;;
+  verify)
+    echo "Verified: yes (fake)."
+    ;;
+  exec)
+    if [ "${1:-}" = "--" ]; then shift; fi
+    echo "(fake) lane exec: skipped container execution"
+    ;;
+  push)
+    echo "Build + push succeeded (fake)."
+    echo "Container pushed to registry: yes"
+    ;;
+  *)
+    echo "lane $cmd (fake): ok"
+    ;;
+esac
+""",
+            encoding="utf-8",
+        )
+        lane_path.chmod(0o755)
+
+        base_env = dict(os.environ)
+        # Load prompt-tests/.env if present (local dev convenience)
+        base_env = load_dotenv_into(base_env, repo_root / "prompt-tests" / ".env")
+        # Codex CLI reads OPENAI_API_KEY; accept CODEX_API_KEY as an alias.
+        if not base_env.get("OPENAI_API_KEY") and base_env.get("CODEX_API_KEY"):
+            base_env["OPENAI_API_KEY"] = base_env["CODEX_API_KEY"]
+        base_env["PATH"] = f"{bin_dir}:{base_env.get('PATH','')}"
+
         subprocess.run(
             ["git", "init"],
             cwd=str(ws),
@@ -368,21 +550,25 @@ def main() -> None:
         profile = dict(scenario["terminal"]["developer_profile"])
 
         terminal_boot = build_terminal_agent_bootstrap(profile, command_outputs)
+        terminal_sandbox = "none" if args.codex_sandbox == "none" else "read-only"
         terminal_thread, _ = codex_exec_jsonl(
             workspace=ws,
             prompt=terminal_boot,
             thread_id=None,
-            sandbox="read-only",
+            sandbox=terminal_sandbox,
             full_auto=True,
+            env=base_env,
         )
 
         thread_id, events = codex_exec_jsonl(
             workspace=ws,
             prompt=lane_prompt,
             thread_id=None,
-            sandbox="workspace-write",
+            sandbox=args.codex_sandbox,
             full_auto=True,
+            env=base_env,
         )
+        in_interview = True
         for m in extract_codex_agent_messages(events):
             turns.append(Turn("LaneAgent", m))
             if looks_like_multiple_questions(m):
@@ -390,6 +576,13 @@ def main() -> None:
                 notable_failures.append(
                     "LaneAgent asked multiple interview questions in one message"
                 )
+            if in_interview and too_many_questions_in_one_message(m):
+                invariants["interview_one_question_at_a_time"] = False
+                notable_failures.append(
+                    "LaneAgent asked more than one question in a single interview message"
+                )
+            if "email address" in m.lower() or "6-digit" in m.lower() or "verification code" in m.lower():
+                in_interview = False
 
         max_turns = int(scenario.get("stop_after", {}).get("max_turns", 18))
 
@@ -420,6 +613,8 @@ def main() -> None:
                 terminal_thread=terminal_thread,
                 lane_agent_message=last_assistant,
                 command_outputs=command_outputs,
+                sandbox=terminal_sandbox,
+                env=base_env,
             )
             if not reply.strip():
                 stop_reason = "terminal_silent"
@@ -435,13 +630,17 @@ def main() -> None:
                 break
 
             turns.append(Turn("Terminal", reply))
+            if is_session_complete_message(reply):
+                stop_reason = "completed"
+                break
 
             thread_id, ev = codex_exec_jsonl(
                 workspace=ws,
                 prompt=reply,
                 thread_id=thread_id,
-                sandbox="workspace-write",
+                sandbox=args.codex_sandbox,
                 full_auto=True,
+                env=base_env,
             )
             for m in extract_codex_agent_messages(ev):
                 turns.append(Turn("LaneAgent", m))
@@ -450,6 +649,13 @@ def main() -> None:
                     notable_failures.append(
                         "LaneAgent asked multiple interview questions in one message"
                     )
+                if in_interview and too_many_questions_in_one_message(m):
+                    invariants["interview_one_question_at_a_time"] = False
+                    notable_failures.append(
+                        "LaneAgent asked more than one question in a single interview message"
+                    )
+                if "email address" in m.lower() or "6-digit" in m.lower() or "verification code" in m.lower():
+                    in_interview = False
                 if (
                     "cd .." in m.lower()
                     or "parent directory" in m.lower()
