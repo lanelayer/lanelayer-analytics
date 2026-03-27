@@ -224,8 +224,6 @@ Bootstrap the lane from the sample template:
 curl -sL "{{API_URL}}/sample.tar?session={{SESSION_ID}}" | tar xf -
 ```
 
-Follow:
-- Build guide: `{{API_URL}}/api/v1/docs/guide?session={{SESSION_ID}}`
 
 After each meaningful milestone (lane created, core logic complete), run:
 ```
