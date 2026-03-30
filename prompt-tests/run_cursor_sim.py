@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -13,12 +14,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 INTERVIEW_QUESTIONS = [
-    "What type of application do you want to build?",
-    "What are the core features and functionality you need?",
-    "What data needs to be stored persistently?",
-    "What are the key business rules or logic?",
-    "Are there any specific requirements or constraints?",
-    "What programming language do you prefer?",
+    "What do you want this system to help people do?",
+    "Who will use this system, and how many parties are involved?",
+    "What needs to be shared or tracked inside the system?",
+    "What is the one thing this system must get right?",
+    "Do you want a specific programming language, or should I use the default?",
 ]
 
 STEP_HEADERS = [
@@ -54,10 +54,38 @@ def _agent_path() -> Optional[str]:
     return None
 
 
-def load_lane_prompt(repo_root: Path, api_url: str) -> str:
+def load_dotenv_into(env: Dict[str, str], dotenv_path: Path) -> Dict[str, str]:
+    """
+    Minimal .env loader (KEY=VALUE lines). No interpolation.
+    Values in the .env override existing env.
+    """
+    if not dotenv_path.exists():
+        return env
+    for raw in dotenv_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k = k.strip()
+        v = v.strip().strip('"').strip("'")
+        if k:
+            env[k] = v
+    return env
+
+
+def make_session_id() -> str:
+    return str(int(time.time() * 1000))
+
+
+def load_lane_prompt(repo_root: Path, api_url: str, session_id: str) -> str:
     prompt_path = repo_root / "scripts" / "default-prompt.txt"
     content = prompt_path.read_text(encoding="utf-8")
-    return content.replace("{{API_URL}}", api_url.rstrip("/"))
+    return (
+        content.replace("{{API_URL}}", api_url.rstrip("/"))
+        .replace("{{SESSION_ID}}", session_id)
+    )
 
 
 def load_scenario(repo_root: Path, scenario_path: Path) -> Dict[str, Any]:
@@ -79,6 +107,7 @@ def run_agent_json(
     resume: Optional[str] = None,
     mode: Optional[str] = None,
     force: bool = False,
+    env: Optional[Dict[str, str]] = None,
 ) -> Tuple[str, str]:
     cmd = [
         agent_path,
@@ -103,6 +132,7 @@ def run_agent_json(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        env=env,
     )
     if p.returncode != 0:
         raise RuntimeError(
@@ -130,6 +160,7 @@ def run_agent_stream_json(
     prompt: str,
     resume: Optional[str] = None,
     force: bool = True,
+    env: Optional[Dict[str, str]] = None,
 ) -> Tuple[str, List[Dict[str, Any]]]:
     cmd = [
         agent_path,
@@ -152,6 +183,7 @@ def run_agent_stream_json(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        env=env,
     )
     if p.returncode != 0:
         raise RuntimeError(
@@ -205,6 +237,33 @@ def looks_like_multiple_questions(text: str) -> bool:
         return True
     matched = sum(1 for q in INTERVIEW_QUESTIONS if q.lower() in text.lower())
     return matched >= 2
+
+
+def too_many_questions_in_one_message(text: str) -> bool:
+    return text.count("?") >= 2
+
+
+def is_session_complete_message(text: str) -> bool:
+    t = text.strip().lower()
+    if t in {"exit", "logout", "^d", "noop", "whoami", "pwd"}:
+        return True
+    return any(
+        p in t
+        for p in (
+            "the conversation is done",
+            "conversation is done",
+            "session complete",
+            "session closed",
+            "end session",
+            "end of session",
+            "no further messages",
+            "no further input",
+            "(no response",
+            "(done.)",
+            "(done)",
+            "(end of session",
+        )
+    )
 
 
 def build_terminal_agent_bootstrap(profile: Dict[str, str], command_outputs: Dict[str, str]) -> str:
@@ -280,6 +339,8 @@ def check_journey_log(workspace: Path) -> Tuple[bool, List[str]]:
         return False, ["journey.log not created"]
 
     text = jl.read_text(encoding="utf-8", errors="replace")
+    if "{{SESSION_ID}}" in text:
+        failures.append("journey.log contains unsubstituted {{SESSION_ID}} placeholder")
     required_headers = [
         "## Session:",
         "### Interview",
@@ -413,7 +474,8 @@ def main() -> None:
             "Then ensure ~/.local/bin is on your PATH, or run from a shell where 'agent' works."
         )
 
-    lane_prompt = load_lane_prompt(repo_root, args.api_url)
+    session_id = os.environ.get("LANELAYER_SESSION_ID", "").strip() or make_session_id()
+    lane_prompt = load_lane_prompt(repo_root, args.api_url, session_id)
     scenario = load_scenario(repo_root, Path(args.scenario))
 
     turns: List[Turn] = []
@@ -435,6 +497,50 @@ def main() -> None:
         profile = dict(scenario["terminal"]["developer_profile"])
 
         terminal_boot = build_terminal_agent_bootstrap(profile, command_outputs)
+        # Provide a fake `lane` binary so the prompt flow can run in CI
+        # without relying on external services for signup/verify/push.
+        bin_dir = ws / "_bin"
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        lane_path = bin_dir / "lane"
+        lane_path.write_text(
+            """#!/usr/bin/env bash
+set -euo pipefail
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  --help|-h|help|"")
+    echo "@lanelayer/cli@0.4.20 (fake)"
+    echo "Usage: lane <command> [args]"
+    ;;
+  signup)
+    echo "Signup initiated (fake). Verification code sent."
+    ;;
+  verify)
+    echo "Verified: yes (fake)."
+    ;;
+  exec)
+    if [ "${1:-}" = "--" ]; then shift; fi
+    echo "(fake) lane exec: skipped container execution"
+    ;;
+  push)
+    echo "Build + push succeeded (fake)."
+    echo "Container pushed to registry: yes"
+    ;;
+  *)
+    echo "lane $cmd (fake): ok"
+    ;;
+esac
+""",
+            encoding="utf-8",
+        )
+        lane_path.chmod(0o755)
+
+        base_env = dict(os.environ)
+        # Load prompt-tests/.env if present (local dev convenience)
+        base_env = load_dotenv_into(base_env, repo_root / "prompt-tests" / ".env")
+        base_env["PATH"] = f"{bin_dir}:{base_env.get('PATH','')}"
+
         terminal_session, _ = run_agent_json(
             agent_path=agent_path,
             workspace=ws,
@@ -442,11 +548,17 @@ def main() -> None:
             resume=None,
             mode="ask",
             force=False,
+            env=base_env,
         )
 
         session_id, events = run_agent_stream_json(
-            agent_path=agent_path, workspace=ws, prompt=lane_prompt, resume=None
+            agent_path=agent_path,
+            workspace=ws,
+            prompt=lane_prompt,
+            resume=None,
+            env=base_env,
         )
+        in_interview = True
         for m in extract_assistant_messages(events):
             turns.append(Turn("LaneAgent", m))
             if looks_like_multiple_questions(m):
@@ -454,6 +566,13 @@ def main() -> None:
                 notable_failures.append(
                     "LaneAgent asked multiple interview questions in one message"
                 )
+            if in_interview and too_many_questions_in_one_message(m):
+                invariants["interview_one_question_at_a_time"] = False
+                notable_failures.append(
+                    "LaneAgent asked more than one question in a single interview message"
+                )
+            if "email address" in m.lower() or "6-digit" in m.lower() or "verification code" in m.lower():
+                in_interview = False
             if "parent director" in m.lower() or "scan" in m.lower() and "workspace" in m.lower():
                 invariants["no_parent_directory_access"] = False
                 notable_failures.append("LaneAgent mentioned scanning/parent directory access")
@@ -502,9 +621,16 @@ def main() -> None:
                 break
 
             turns.append(Turn("Terminal", reply))
+            if is_session_complete_message(reply):
+                stop_reason = "completed"
+                break
 
             _, ev = run_agent_stream_json(
-                agent_path=agent_path, workspace=ws, prompt=reply, resume=session_id
+                agent_path=agent_path,
+                workspace=ws,
+                prompt=reply,
+                resume=session_id,
+                env=base_env,
             )
             for m in extract_assistant_messages(ev):
                 turns.append(Turn("LaneAgent", m))
@@ -513,6 +639,13 @@ def main() -> None:
                     notable_failures.append(
                         "LaneAgent asked multiple interview questions in one message"
                     )
+                if in_interview and too_many_questions_in_one_message(m):
+                    invariants["interview_one_question_at_a_time"] = False
+                    notable_failures.append(
+                        "LaneAgent asked more than one question in a single interview message"
+                    )
+                if "email address" in m.lower() or "6-digit" in m.lower() or "verification code" in m.lower():
+                    in_interview = False
                 if (
                     "cd .." in m.lower()
                     or "parent directory" in m.lower()
