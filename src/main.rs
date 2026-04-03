@@ -39,6 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .allow_headers(Any);
 
     let app = Router::new()
+        .route("/bizcard/:slug", get(handlers::bizcard_redirect))
         .route("/health", get(handlers::health))
         .route("/sample.tar", get(handlers::serve_sample_tar))
         .route("/api/v1/events", post(handlers::track_event))

@@ -108,3 +108,31 @@ pub async fn notify_email_registered(email: &str, session_id: &str) {
     ]);
     send_slack_notification("New Email Registration!", Some(blocks)).await;
 }
+
+pub async fn notify_bizcard_redirect(display_name: &str, slug: &str, user_agent: &str) {
+    let blocks = json!([
+        { "type": "header", "text": { "type": "plain_text", "text": "Bizcard scan" } },
+        {
+            "type": "section",
+            "fields": [
+                { "type": "mrkdwn", "text": format!("*Person:*\n{}", display_name) },
+                { "type": "mrkdwn", "text": format!("*Slug:*\n`{}`", slug) },
+            ]
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": format!(
+                    "*User-Agent:*\n```{}```",
+                    if user_agent.is_empty() { "unknown" } else { user_agent }
+                )
+            }
+        }
+    ]);
+    send_slack_notification(
+        &format!("Bizcard redirect: {}", display_name),
+        Some(blocks),
+    )
+    .await;
+}
