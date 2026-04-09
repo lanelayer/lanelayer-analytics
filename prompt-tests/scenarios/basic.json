@@ -8,7 +8,7 @@
       "business_rules": "Only the depositor can refund before release; only the recipient can claim after release conditions are met.",
       "constraints": "Keep it minimal; Python is fine; use the recommended template.",
       "language": "Python",
-      "email": "dev@example.com"
+      "email": "ci-test@ontuafli.resend.app"
     },
     "command_outputs": {
       "lane --help": "prompt-tests/fixtures/lane_help.txt"

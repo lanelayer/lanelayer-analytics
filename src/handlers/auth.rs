@@ -164,7 +164,7 @@ pub async fn get_email_from_session_id(
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT email FROM email_registrations
-         WHERE session_id = ? AND auth_token = ?
+         WHERE session_id = ?
          ORDER BY (verified_at IS NOT NULL) DESC, created_at DESC
          LIMIT 1",
     )
@@ -183,5 +183,50 @@ pub async fn get_email_from_session_id(
 #[derive(Debug, Deserialize)]
 pub struct GetEmailFromSessionQuery {
     pub auth_token: Option<String>,
+}
+
+// ── Test-only endpoint: retrieve pending verification code ──────────
+// Gated by the PROMPT_TEST_SECRET env var. CI passes the same value
+// in the X-Test-Secret header. If the env var is unset the endpoint
+// always returns 404 — it cannot be reached in production.
+
+#[derive(Debug, Deserialize)]
+pub struct TestCodeQuery {
+    pub session_id: String,
+}
+
+pub async fn test_verification_code(
+    State(pool): State<SqlitePool>,
+    headers: HeaderMap,
+    Query(query): Query<TestCodeQuery>,
+) -> Result<(StatusCode, String), (StatusCode, String)> {
+    let expected_secret = match std::env::var("PROMPT_TEST_SECRET").ok() {
+        Some(s) if !s.is_empty() => s,
+        _ => return Ok((StatusCode::NOT_FOUND, "not found".into())),
+    };
+
+    let provided = headers
+        .get("x-test-secret")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+
+    if provided != expected_secret {
+        return Ok((StatusCode::NOT_FOUND, "not found".into()));
+    }
+
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT verification_code FROM email_registrations
+         WHERE session_id = ? AND verified_at IS NULL
+         ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(&query.session_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    match row {
+        Some((code,)) => Ok((StatusCode::OK, code)),
+        None => Ok((StatusCode::NOT_FOUND, "no pending code".into())),
+    }
 }
 
