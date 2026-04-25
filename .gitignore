@@ -13,4 +13,3 @@ dist/
 /target/
 
 # Runtime artifacts
-prompt-tests/journey.log
